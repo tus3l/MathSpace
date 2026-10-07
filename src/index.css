@@ -1,0 +1,145 @@
+@import "@fontsource/ibm-plex-sans-arabic/400.css";
+@import "@fontsource/ibm-plex-sans-arabic/500.css";
+@import "@fontsource/ibm-plex-sans-arabic/600.css";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "katex/dist/katex.min.css";
+:root {
+  font-family: "IBM Plex Sans Arabic", sans-serif;
+  color: #252a33;
+  background: #f6f7f9;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  --bg: #f6f7f9;
+  --surface: #fff;
+  --surface-alt: #fafbfc;
+  --text: #252a33;
+  --muted: #8b929e;
+  --subtle: #626b78;
+  --line: #e8ebf0;
+  --line-strong: #b6beca;
+  --grid: #eef0f4;
+  --accent: #7770ce;
+  --accent-soft: #efedf9;
+  --green: #249b8d;
+  --orange: #e28e4e;
+  --shadow: 0 12px 40px #2426310d;
+  letter-spacing: 0;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #121419;
+  --surface: #191c22;
+  --surface-alt: #1e2229;
+  --text: #e5e8ee;
+  --muted: #858e9e;
+  --subtle: #a7b0be;
+  --line: #2a2f38;
+  --line-strong: #636d7a;
+  --grid: #272c35;
+  --accent: #a49bec;
+  --accent-soft: #2a263e;
+  --shadow: 0 12px 40px #0003;
+  background: var(--bg);
+  color: var(--text);
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  min-width: 320px;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+button {
+  cursor: pointer;
+  color: inherit;
+  border: none;
+  background: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition:
+    background 160ms,
+    color 160ms;
+}
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+input,
+textarea,
+select {
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  min-width: 0;
+  padding: 9px 12px;
+}
+input::placeholder,
+textarea::placeholder {
+  color: var(--muted);
+}
+select {
+  font-size: 12px;
+}
+input[type="checkbox"] {
+  accent-color: var(--accent);
+}
+a {
+  color: var(--accent);
+}
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+}
+h1 {
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.55;
+}
+h2 {
+  font-size: 16px;
+  font-weight: 600;
+}
+h3 {
+  font-size: 14px;
+  font-weight: 600;
+}
+h4 {
+  font-size: 13px;
+  font-weight: 500;
+}
+p {
+  font-size: 13px;
+  line-height: 1.9;
+  color: var(--subtle);
+}
+code,
+.mono {
+  font-family: "IBM Plex Mono", monospace;
+}
+svg {
+  flex-shrink: 0;
+}
+::selection {
+  background: #7770ce30;
+}
