@@ -208,7 +208,7 @@ export default function App() {
     [topicId, setTopicId] = useState<string | undefined>();
   const [theme, setTheme] = useLocal<"light" | "dark">(
     "math-space-theme",
-    "light",
+    "dark",
   );
   const [history, setHistory] = useLocal<HistoryEntry[]>(
     "math-space-history",
