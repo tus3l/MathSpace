@@ -198,6 +198,13 @@ const navigation: Navigation[] = [
     color: "#249b8d",
   },
 ];
+const sidebarViews: View[] = ["geometry", "three", "trigonometry"];
+const sidebarNavigation = sidebarViews.map(
+  (id) => navigation.find((item) => item.id === id)!,
+);
+const libraryNavigation = navigation.filter(
+  (item) => item.id !== "library" && !sidebarViews.includes(item.id),
+);
 export default function App() {
   const [view, setView] = useState<View>("workspace"),
     [drawer, setDrawer] = useState(false),
@@ -325,6 +332,7 @@ export default function App() {
     ) : (
       <Library
         key={topicId || "library"}
+        sections={libraryNavigation}
         selectedId={topicId}
         bookmarks={bookmarks}
         toggleBookmark={toggleBookmark}
@@ -343,9 +351,9 @@ export default function App() {
             <small>MATH SPACE</small>
           </span>
         </button>
-        <div className="sidebar-section-label">مساحتك</div>
+        <div className="sidebar-section-label">المختبرات الرياضية</div>
         <nav aria-label="التنقل الرئيسي">
-          {navigation.slice(0, 4).map((item) => (
+          {sidebarNavigation.map((item) => (
             <NavItem
               key={item.id}
               item={item}
@@ -353,26 +361,12 @@ export default function App() {
               onClick={() => navigate(item.id)}
             />
           ))}
-          <div className="sidebar-section-label">
-            المختبرات الرياضية <span>12</span>
-          </div>
-          {navigation.slice(4, 16).map((item) => (
-            <NavItem
-              key={item.id}
-              item={item}
-              active={view === item.id}
-              onClick={() => navigate(item.id)}
-            />
-          ))}
-          <div className="sidebar-section-label">التعلم</div>
-          {navigation.slice(16).map((item) => (
-            <NavItem
-              key={item.id}
-              item={item}
-              active={view === item.id}
-              onClick={() => navigate(item.id)}
-            />
-          ))}
+          <div className="sidebar-section-label">المكتبة</div>
+          <NavItem
+            item={navigation.find((item) => item.id === "library")!}
+            active={view === "library"}
+            onClick={() => navigate("library")}
+          />
         </nav>
         <div className="sidebar-footer">
           <span className="status-dot" />

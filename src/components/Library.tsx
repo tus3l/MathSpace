@@ -8,6 +8,7 @@ import {
   X,
   ExternalLink,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { topics, searchTopics } from "../content/knowledge";
 import type { Topic, View } from "../content/knowledge";
 import { Formula, Why } from "./Controls";
@@ -15,11 +16,19 @@ import { LabHeader } from "./CoreLabs";
 import { Graph } from "./Graph";
 
 export function Library({
+  sections,
   bookmarks,
   toggleBookmark,
   onNavigate,
   selectedId,
 }: {
+  sections: {
+    id: View;
+    title: string;
+    english: string;
+    icon: LucideIcon;
+    color: string;
+  }[];
   bookmarks: string[];
   toggleBookmark: (id: string) => void;
   onNavigate: (view: View) => void;
@@ -61,6 +70,35 @@ export function Library({
         title="المكتبة الرياضية"
         badge={`${topics.length} موضوعًا موثقًا`}
       />
+      <section aria-label="الأقسام">
+        <div className="home-section-heading">
+          <h2>الأقسام</h2>
+          <span>{sections.length} قسمًا</span>
+        </div>
+        <div className="lab-directory">
+          {sections.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button key={item.id} onClick={() => onNavigate(item.id)}>
+                <span
+                  className="directory-icon"
+                  style={{ color: item.color, background: `${item.color}15` }}
+                >
+                  <Icon size={23} strokeWidth={1.5} />
+                </span>
+                <span>
+                  <strong>{item.title}</strong>
+                  <small>{item.english}</small>
+                </span>
+                <ArrowLeft size={15} />
+              </button>
+            );
+          })}
+        </div>
+      </section>
+      <div className="home-section-heading">
+        <h2>المفاهيم والقوانين</h2>
+      </div>
       <div className="library-toolbar">
         <div className="local-search">
           <Search size={17} />
