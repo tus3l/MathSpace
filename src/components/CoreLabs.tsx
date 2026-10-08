@@ -14,9 +14,12 @@ import {
   checkStep,
   compileFunction,
   fmt,
+  normalize,
+  safeParse,
   symbolic,
 } from "../engine/math";
 import { riemann } from "../engine/simulations";
+import { MathTools } from "./MathTools";
 
 export function LabHeader({
   english,
@@ -64,6 +67,32 @@ export function ProofLab() {
     [b, setB] = useState(2),
     [current, setCurrent] = useState(0);
   const [proof, setProof] = useState("square");
+  const [customExpression, setCustomExpression] = useState("x^2");
+  const [customError, setCustomError] = useState("");
+  const proofExpression = proof === "square"
+    ? "(a+b)^2=a^2+2*a*b+b^2"
+    : proof === "pythagoras" ? "3^2+4^2=5^2" : customExpression;
+  function applyExpression(expression: string) {
+    const normalized = normalize(expression).replace(/\s/g, "");
+    if (["(a+b)^2=a^2+2*a*b+b^2", "3^2+4^2=5^2"].includes(normalized)) {
+      setProof(normalized.startsWith("(a+b)") ? "square" : "pythagoras");
+      setCurrent(0);
+      setCustomError("");
+      return;
+    }
+    try {
+      const graphExpression = normalize(expression).replace(/^y\s*=\s*/, "");
+      safeParse(graphExpression, ["x"]);
+      const evaluate = compileFunction(graphExpression);
+      if (!Array.from({ length: 101 }, (_, index) => -5 + index / 10).some((x) => Number.isFinite(evaluate(x))))
+        throw new Error("لا توجد قيم حقيقية للتعبير ضمن مجال الرسم.");
+      setCustomExpression(graphExpression);
+      setProof("custom");
+      setCustomError("");
+    } catch (failure) {
+      setCustomError(failure instanceof Error ? failure.message : "تعذر قراءة التعبير.");
+    }
+  }
   const total = a + b,
     sideA = (290 * a) / total,
     sideB = (290 * b) / total;
@@ -114,6 +143,29 @@ export function ProofLab() {
   return (
     <>
       <LabHeader english="VISUAL PROOF SIMULATOR" title="الإثبات، كما تراه" />
+      <MathTools
+        expression={proofExpression}
+        onApply={applyExpression}
+        presets={[
+          { title: "مربع المجموع", expression: "(a+b)^2=a^2+2*a*b+b^2", topicId: "square" },
+          { title: "فيثاغورس — المساحات", expression: "3^2+4^2=5^2", topicId: "pythagoras" },
+          { title: "استكشاف فرق بين مربعين", expression: "x^2-4", topicId: "difference" },
+        ]}
+      />
+      {customError && <p className="error-message" role="alert">{customError}</p>}
+      {proof === "custom" ? (
+        <section className="lab-stage">
+          <div className="section-heading">
+            <h2>استكشاف التعبير</h2>
+            <button className="button secondary" onClick={() => { setProof("square"); setCurrent(0); }}>
+              <RotateCcw size={16} /> العودة للإثبات
+            </button>
+          </div>
+          <Formula value={customExpression} block />
+          <Graph curves={[{ expression: customExpression, color: "#249b8d", label: "f(x)" }]} />
+          <Insight>الرسم يوضح قيم التعبير، وليس إثباتًا عامًا لهوية أو معادلة.</Insight>
+        </section>
+      ) : (
       <div className="lab-layout">
         <section className="lab-stage">
           <div className="section-heading">
@@ -326,6 +378,7 @@ export function ProofLab() {
           )}
         </aside>
       </div>
+      )}
     </>
   );
 }

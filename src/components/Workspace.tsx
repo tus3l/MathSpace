@@ -24,6 +24,7 @@ import type { Analysis } from "../engine/math";
 import { functionFamilies } from "../content/knowledge";
 import { Graph } from "./Graph";
 import { Formula, Slider, Why } from "./Controls";
+import { MathTools } from "./MathTools";
 
 type Props = {
   onSave: (expression: string, kind: string) => void;
@@ -172,6 +173,16 @@ export function Workspace({
           حفظ المسألة
         </button>
       </div>
+      <MathTools
+        expression={input}
+        onApply={submit}
+        presets={[
+          { title: "المعادلة التربيعية", expression: "x^2+5*x+6=0", topicId: "quadratic" },
+          { title: "الدوال والتحويلات", expression: "(x-2)^2+3", topicId: "functions" },
+          { title: "فرق بين مربعين", expression: "x^2-4=0", topicId: "difference" },
+          ...functionFamilies.map(([title, expression]) => ({ title, expression })),
+        ]}
+      />
       <form
         className="equation-entry"
         onSubmit={(event) => {

@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { RotateCcw } from "lucide-react";
-import { compileFunction, fmt } from "../engine/math";
+import { compileFunction, fmt, safeParse } from "../engine/math";
 import { Slider, Why } from "./Controls";
 import { Insight, LabHeader } from "./CoreLabs";
+import { MathTools } from "./MathTools";
 
 export default function ThreeLab() {
   const mountRef = useRef<HTMLDivElement>(null);
@@ -239,9 +240,35 @@ export default function ThreeLab() {
               ? dimension ** 2 +
                 2 * dimension * Math.hypot(height, dimension / 2)
               : (Math.sqrt(3) / 2) * dimension ** 2 + 3 * dimension * height;
+  function applySurface(expression: string) {
+    try {
+      safeParse(expression, ["x", "y"]);
+      const evaluate = compileFunction(expression);
+      const samples = Array.from({ length: 61 }, (_, index) => -3 + index / 10);
+      if (!samples.some((x) => samples.some((y) => Number.isFinite(evaluate(x, { y })))))
+        throw new Error("لا توجد قيم حقيقية للسطح ضمن مجال العرض.");
+      setDraft(expression);
+      setSurface(expression);
+      setShape("surface");
+      setError("");
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "تعذر قراءة الدالة في x وy.");
+    }
+  }
   return (
     <>
       <LabHeader english="3D MATH LAB" title="بُعد آخر للفهم" />
+      <MathTools
+        expression={surface}
+        onApply={applySurface}
+        presets={[
+          { title: "القطع المكافئ الدائري", expression: "x^2+y^2" },
+          { title: "سطح السرج", expression: "x^2-y^2" },
+          { title: "الموجة", expression: "sin(x)*cos(y)" },
+          { title: "المستوى", expression: "x+y" },
+          { title: "نصف الكرة", expression: "sqrt(9-x^2-y^2)" },
+        ]}
+      />
       <div className="lab-layout">
         <section className="lab-stage three-stage">
           <div className="section-heading">
@@ -303,13 +330,7 @@ export default function ThreeLab() {
             <form
               onSubmit={(event) => {
                 event.preventDefault();
-                try {
-                  compileFunction(draft);
-                  setSurface(draft);
-                  setError("");
-                } catch {
-                  setError("تعذر قراءة الدالة في x وy.");
-                }
+                applySurface(draft);
               }}
             >
               <label className="field-label">
@@ -325,10 +346,7 @@ export default function ThreeLab() {
               <button
                 type="button"
                 className="what-if"
-                onClick={() => {
-                  setDraft("sin(x)*cos(y)");
-                  setSurface("sin(x)*cos(y)");
-                }}
+                onClick={() => applySurface("sin(x)*cos(y)")}
               >
                 z = sin(x) cos(y)
               </button>

@@ -1449,6 +1449,29 @@
   align-items: center;
   justify-content: space-between;
 }
+.math-tools {
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 16px;
+}
+.math-tools > .tabs {
+  flex-wrap: wrap;
+}
+.math-tools-content {
+  padding-top: 16px;
+  max-width: 680px;
+}
+.math-tools-content .field-label input,
+.math-tools-content .field-label select {
+  width: 100%;
+  min-width: 0;
+}
+.math-tools-content .button {
+  margin-top: 12px;
+}
+.math-tools-content > .button + .field-label {
+  margin-top: 20px;
+}
 .local-search {
   display: flex;
   gap: 10px;
