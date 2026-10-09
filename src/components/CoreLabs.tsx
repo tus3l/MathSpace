@@ -14,6 +14,7 @@ import {
   checkStep,
   compileFunction,
   fmt,
+  mathRequest,
   normalize,
   safeParse,
   symbolic,
@@ -68,10 +69,11 @@ export function ProofLab() {
     [current, setCurrent] = useState(0);
   const [proof, setProof] = useState("square");
   const [customExpression, setCustomExpression] = useState("x^2");
+  const [customSource, setCustomSource] = useState("x^2");
   const [customError, setCustomError] = useState("");
   const proofExpression = proof === "square"
     ? "(a+b)^2=a^2+2*a*b+b^2"
-    : proof === "pythagoras" ? "3^2+4^2=5^2" : customExpression;
+    : proof === "pythagoras" ? "3^2+4^2=5^2" : customSource;
   function applyExpression(expression: string) {
     const normalized = normalize(expression).replace(/\s/g, "");
     if (["(a+b)^2=a^2+2*a*b+b^2", "3^2+4^2=5^2"].includes(normalized)) {
@@ -81,12 +83,16 @@ export function ProofLab() {
       return;
     }
     try {
-      const graphExpression = normalize(expression).replace(/^y\s*=\s*/, "");
+      const request = mathRequest(expression);
+      const operand = request.expression.replace(/^y\s*=\s*/, "");
+      safeParse(operand, ["x"]);
+      const graphExpression = request.operation ? symbolic(operand, request.operation) : operand;
       safeParse(graphExpression, ["x"]);
       const evaluate = compileFunction(graphExpression);
       if (!Array.from({ length: 101 }, (_, index) => -5 + index / 10).some((x) => Number.isFinite(evaluate(x))))
         throw new Error("لا توجد قيم حقيقية للتعبير ضمن مجال الرسم.");
       setCustomExpression(graphExpression);
+      setCustomSource(expression);
       setProof("custom");
       setCustomError("");
     } catch (failure) {
@@ -163,7 +169,10 @@ export function ProofLab() {
           </div>
           <Formula value={customExpression} block />
           <Graph curves={[{ expression: customExpression, color: "#249b8d", label: "f(x)" }]} />
-          <Insight>الرسم يوضح قيم التعبير، وليس إثباتًا عامًا لهوية أو معادلة.</Insight>
+          <Insight>
+            الرسم يوضح قيم التعبير، وليس إثباتًا عامًا لهوية أو معادلة.
+            {mathRequest(customSource).operation === "integral" && " عند التكامل يعرض الرسم الدالة الأصلية مع C = 0."}
+          </Insight>
         </section>
       ) : (
       <div className="lab-layout">

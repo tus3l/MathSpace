@@ -295,6 +295,51 @@
   color: var(--muted);
   margin-inline-end: 15px;
 }
+.math-input-control {
+  min-width: 0;
+  width: 100%;
+}
+.equation-entry > .math-input-control {
+  flex: 1;
+}
+.math-input-control > input {
+  width: 100%;
+}
+.math-symbols {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+}
+.math-symbols > button {
+  min-width: 40px;
+  height: 36px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--text);
+  background: var(--surface-alt);
+}
+.math-symbols > button:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.math-symbols .formula {
+  font-size: 13px;
+}
+.math-input-preview {
+  min-height: 38px;
+  padding: 8px 0 2px;
+  overflow-x: auto;
+  color: var(--subtle);
+  text-align: left;
+}
+.math-input-preview .formula {
+  font-size: 15px;
+}
+.equation-entry .math-input-control > input {
+  width: 100%;
+}
 .workspace-navigation {
   display: flex;
   align-items: center;

@@ -23,7 +23,7 @@ import {
 import type { Analysis } from "../engine/math";
 import { functionFamilies } from "../content/knowledge";
 import { Graph } from "./Graph";
-import { Formula, Slider, Why } from "./Controls";
+import { Formula, MathInput, Slider, Why } from "./Controls";
 import { MathTools } from "./MathTools";
 
 type Props = {
@@ -191,12 +191,10 @@ export function Workspace({
         }}
       >
         <div className="equation-marker">ƒ</div>
-        <input
-          aria-label="المعادلة"
-          dir="ltr"
+        <MathInput
+          label="المعادلة"
           value={input}
-          onChange={(event) => setInput(event.target.value)}
-          spellCheck={false}
+          onChange={setInput}
         />
         <span className="entry-type">Math input</span>
         <button className="button primary" type="submit">

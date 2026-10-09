@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { topics } from "../content/knowledge";
 import { analyze, checkStep } from "../engine/math";
-import { Formula, Why } from "./Controls";
+import { Formula, MathInput, Why } from "./Controls";
 
 export type LawPreset = {
   title: string;
@@ -20,10 +20,12 @@ export function MathTools({
   expression,
   presets,
   onApply,
+  variables,
 }: {
   expression: string;
   presets: LawPreset[];
   onApply: (expression: string) => void;
+  variables?: string[];
 }) {
   const [panel, setPanel] = useState<"library" | "advisor" | "write" | null>(
     null,
@@ -128,11 +130,11 @@ export function MathTools({
         >
           <label className="field-label">
             التعبير الرياضي
-            <input
-              aria-label="التعبير المخصص"
-              dir="ltr"
+            <MathInput
+              label="التعبير المخصص"
               value={draft}
-              onChange={(event) => setDraft(event.target.value)}
+              onChange={setDraft}
+              variables={variables}
               required
             />
           </label>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   CircleHelp,
   Play,
@@ -6,8 +6,113 @@ import {
   SkipBack,
   SkipForward,
   RotateCcw,
+  Eraser,
 } from "lucide-react";
 import katex from "katex";
+import { mathRequest, normalize, safeParse } from "../engine/math";
+
+export function MathInput({
+  value,
+  onChange,
+  label,
+  required = false,
+  variables = ["x"],
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  label: string;
+  required?: boolean;
+  variables?: string[];
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  let preview = "";
+  try {
+    const request = mathRequest(value);
+    if (request.operation) {
+      const expression = safeParse(request.expression).toTex();
+      preview = request.operation === "integral"
+        ? `\\int ${expression}\\,dx`
+        : `\\frac{d}{dx}\\left(${expression}\\right)`;
+    } else {
+      const sides = normalize(value).split("=");
+      if (sides.length <= 2)
+        preview = sides.map((side) => safeParse(side).toTex()).join("=");
+    }
+  } catch {
+    preview = "";
+  }
+  function insert(prefix: string, suffix = "", fallback = "x", operation = false) {
+    const input = inputRef.current;
+    if (!input) return;
+    let start = input.selectionStart ?? value.length;
+    let end = input.selectionEnd ?? start;
+    let selected = value.slice(start, end);
+    if (operation) {
+      start = 0;
+      end = value.length;
+      selected = value.includes("=") ? "" : value;
+    }
+    const body = fallback === "" ? "" : selected || fallback;
+    onChange(value.slice(0, start) + prefix + body + suffix + value.slice(end));
+    requestAnimationFrame(() => {
+      input.focus();
+      input.setSelectionRange(start + prefix.length, start + prefix.length + body.length);
+    });
+  }
+  return (
+    <div className="math-input-control">
+      <input
+        ref={inputRef}
+        aria-label={label}
+        dir="ltr"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        spellCheck={false}
+        autoCapitalize="off"
+        autoComplete="off"
+        required={required}
+        maxLength={250}
+      />
+      <div className="math-symbols" role="toolbar" aria-label={`رموز ${label}`} dir="ltr">
+        {[
+          { title: "الجيب", latex: "\\sin", prefix: "sin(", suffix: ")" },
+          { title: "جيب التمام", latex: "\\cos", prefix: "cos(", suffix: ")" },
+          { title: "الظل", latex: "\\tan", prefix: "tan(", suffix: ")" },
+          { title: "الجذر التربيعي", latex: "\\sqrt{x}", prefix: "sqrt(", suffix: ")" },
+          { title: "التربيع", latex: "x^2", prefix: "(", suffix: ")^2" },
+          { title: "قوة", latex: "x^n", prefix: "(", suffix: ")^3" },
+          { title: "كسر", latex: "\\frac{x}{y}", prefix: "(", suffix: ")/(1)" },
+          { title: "القيمة المطلقة", latex: "|x|", prefix: "abs(", suffix: ")" },
+          { title: "اللوغاريتم الطبيعي", latex: "\\ln", prefix: "ln(", suffix: ")" },
+          { title: "اللوغاريتم العشري", latex: "\\log_{10}", prefix: "log10(", suffix: ")" },
+          { title: "الدالة الأسية", latex: "e^x", prefix: "exp(", suffix: ")" },
+          { title: "تكامل غير محدد بالنسبة إلى x", latex: "\\int", prefix: "∫ (", suffix: ") dx", operation: true },
+          { title: "اشتقاق بالنسبة إلى x", latex: "\\frac{d}{dx}", prefix: "derivative(", suffix: ")", operation: true },
+        ].map((symbol) => (
+          <button key={symbol.title} type="button" title={symbol.title} aria-label={symbol.title}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => insert(symbol.prefix, symbol.suffix, "x", symbol.operation)}>
+            <Formula value={symbol.latex} />
+          </button>
+        ))}
+        {[...variables, "π", "e"].map((symbol) => (
+          <button key={symbol} type="button" title={symbol === "π" ? "باي" : symbol} aria-label={symbol === "π" ? "باي" : `إدراج ${symbol}`}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => insert(symbol, "", "")}>
+            <Formula value={symbol === "π" ? "\\pi" : symbol} />
+          </button>
+        ))}
+        <button type="button" title="مسح الإدخال" aria-label="مسح الإدخال"
+          onClick={() => { onChange(""); inputRef.current?.focus(); }}>
+          <Eraser size={16} />
+        </button>
+      </div>
+      <div className="math-input-preview" aria-label={`معاينة ${label}`}>
+        {preview && <Formula value={preview} />}
+      </div>
+    </div>
+  );
+}
 
 export function Formula({
   value,

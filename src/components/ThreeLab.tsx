@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { RotateCcw } from "lucide-react";
-import { compileFunction, fmt, safeParse } from "../engine/math";
-import { Slider, Why } from "./Controls";
+import { compileFunction, fmt, mathRequest, safeParse, symbolic } from "../engine/math";
+import { MathInput, Slider, Why } from "./Controls";
 import { Insight, LabHeader } from "./CoreLabs";
 import { MathTools } from "./MathTools";
 
@@ -19,6 +19,7 @@ export default function ThreeLab() {
     [dimension, setDimension] = useState(2),
     [height, setHeight] = useState(3),
     [surface, setSurface] = useState("x^2+y^2"),
+    [surfaceSource, setSurfaceSource] = useState("x^2+y^2"),
     [draft, setDraft] = useState("x^2+y^2"),
     [error, setError] = useState("");
   useEffect(() => {
@@ -242,13 +243,17 @@ export default function ThreeLab() {
               : (Math.sqrt(3) / 2) * dimension ** 2 + 3 * dimension * height;
   function applySurface(expression: string) {
     try {
-      safeParse(expression, ["x", "y"]);
-      const evaluate = compileFunction(expression);
+      const request = mathRequest(expression);
+      safeParse(request.expression, ["x", "y"]);
+      const calculated = request.operation ? symbolic(request.expression, request.operation) : request.expression;
+      safeParse(calculated, ["x", "y"]);
+      const evaluate = compileFunction(calculated);
       const samples = Array.from({ length: 61 }, (_, index) => -3 + index / 10);
       if (!samples.some((x) => samples.some((y) => Number.isFinite(evaluate(x, { y })))))
         throw new Error("لا توجد قيم حقيقية للسطح ضمن مجال العرض.");
       setDraft(expression);
-      setSurface(expression);
+      setSurfaceSource(expression);
+      setSurface(calculated);
       setShape("surface");
       setError("");
     } catch (failure) {
@@ -259,7 +264,8 @@ export default function ThreeLab() {
     <>
       <LabHeader english="3D MATH LAB" title="بُعد آخر للفهم" />
       <MathTools
-        expression={surface}
+        expression={surfaceSource}
+        variables={["x", "y"]}
         onApply={applySurface}
         presets={[
           { title: "القطع المكافئ الدائري", expression: "x^2+y^2" },
@@ -301,6 +307,7 @@ export default function ThreeLab() {
               {shape === "surface"
                 ? `ارتفاع كل نقطة يساوي z = ${surface}. تعديل الدالة يغير السطح نفسه. المجال المعروض [-3,3]² والارتفاع مقصوص بين -8 و12 لحفظ وضوح العرض.`
                 : `تغيير ${["sphere", "cylinder", "cone"].includes(shape) ? "نصف القطر" : "طول ضلع القاعدة"} يعيد حساب المجسم وحجمه ومساحته. الحجم يتناسب تكعيبيًا عند تكبير جميع الأبعاد بالنسبة نفسها، والمساحة تربيعيًا.`}
+              {shape === "surface" && mathRequest(surfaceSource).operation === "integral" && " عند التكامل يعرض السطح الدالة الأصلية مع C = 0."}
             </p>
           </Insight>
         </section>
@@ -335,11 +342,11 @@ export default function ThreeLab() {
             >
               <label className="field-label">
                 z =
-                <input
-                  aria-label="دالة السطح"
-                  dir="ltr"
+                <MathInput
+                  label="دالة السطح"
                   value={draft}
-                  onChange={(event) => setDraft(event.target.value)}
+                  onChange={setDraft}
+                  variables={["x", "y"]}
                 />
               </label>
               <button className="button primary full-width">تحديث السطح</button>

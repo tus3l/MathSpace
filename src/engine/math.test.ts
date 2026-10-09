@@ -70,4 +70,31 @@ describe("rule-based mathematical engine", () => {
     expect(compileFunction(symbolic("2*x", "integral"))(3)).toBe(9);
     expect(compileFunction(symbolic("(x+2)^2", "expand"))(3)).toBe(25);
   });
+  it("accepts Arabic function names, digits and common mathematical symbols", () => {
+    expect(compileFunction("ساين(x)")(Math.PI / 2)).toBeCloseTo(1);
+    expect(compileFunction("جتا(x)")(0)).toBe(1);
+    expect(compileFunction("ظا(x)")(Math.PI / 4)).toBeCloseTo(1);
+    expect(compileFunction("√(٩)+ln(e)")(0)).toBe(4);
+    expect(compileFunction("\\sin(x)")(Math.PI / 2)).toBeCloseTo(1);
+    expect(compileFunction("SIN(x)")(Math.PI / 2)).toBeCloseTo(1);
+    expect(analyze("٢x+٥=١٥").roots).toEqual([5]);
+  });
+  it("computes typed integral and derivative requests instead of rejecting them", () => {
+    for (const input of ["∫ sin(x) dx", "integral(sin(x))", "integrate(sin(x),x)", "∫ جا(x) dx"]) {
+      const result = analyze(input);
+      expect(result.supported).toBe(true);
+      expect(result.kind).toBe("تكامل غير محدد");
+      expect(result.result).toContain("+ C");
+      const differentiated = compileFunction(symbolic(result.graph, "derivative"));
+      expect(differentiated(0.7)).toBeCloseTo(Math.sin(0.7));
+      expect(result.steps.every((item) => item.before && item.after && item.reason && item.rule)).toBe(true);
+    }
+    expect(compileFunction(analyze("derivative(sin(x))").graph)(0)).toBe(1);
+    expect(compileFunction(analyze("d/dx (x^3)").graph)(2)).toBe(12);
+    expect(compileFunction("∫ sin(x) dx")(0)).toBe(-1);
+    expect(analyze("\\int sin(x) dx").supported).toBe(true);
+    expect(analyze("integral(import(1))").supported).toBe(false);
+    expect(analyze("integral(x,y)").supported).toBe(false);
+    expect(analyze("∫ sin(x)").supported).toBe(false);
+  });
 });
