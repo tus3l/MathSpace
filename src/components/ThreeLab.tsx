@@ -266,6 +266,7 @@ export default function ThreeLab() {
       <MathTools
         expression={surfaceSource}
         variables={["x", "y"]}
+        defaultPanel="write"
         onApply={applySurface}
         presets={[
           { title: "القطع المكافئ الدائري", expression: "x^2+y^2" },

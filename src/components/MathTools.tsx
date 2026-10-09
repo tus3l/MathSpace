@@ -21,14 +21,16 @@ export function MathTools({
   presets,
   onApply,
   variables,
+  defaultPanel = null,
 }: {
   expression: string;
   presets: LawPreset[];
   onApply: (expression: string) => void;
   variables?: string[];
+  defaultPanel?: "library" | "advisor" | "write" | null;
 }) {
   const [panel, setPanel] = useState<"library" | "advisor" | "write" | null>(
-    null,
+    defaultPanel,
   );
   const [selected, setSelected] = useState(0);
   const [draft, setDraft] = useState(expression);
