@@ -1,6 +1,5 @@
 import { lazy, Suspense, useLayoutEffect, useState } from "react";
 import {
-  Atom,
   House,
   ChartNoAxesCombined,
   Lightbulb,
@@ -343,9 +342,7 @@ export default function App() {
     <div className="app-shell">
       <aside className={`sidebar ${drawer ? "open" : ""}`}>
         <button className="brand" onClick={() => navigate("home")}>
-          <span className="brand-symbol">
-            <Atom size={27} strokeWidth={1.6} />
-          </span>
+          <img className="brand-logo" src="/logo.png" alt="شعار تخيل فضاء الرياضيات" />
           <span>
             <strong>تخيل فضاء الرياضيات</strong>
             <small>MATH SPACE</small>

@@ -116,19 +116,20 @@
   z-index: 30;
 }
 .brand {
+  flex-direction: column;
+  align-items: flex-start;
   justify-content: flex-start;
   padding: 25px 17px 22px;
   gap: 9px;
   text-align: right;
   flex-shrink: 0;
 }
-.brand-symbol {
-  width: 38px;
-  height: 42px;
-  color: var(--accent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.brand-logo {
+  display: block;
+  width: 150px;
+  max-width: 100%;
+  height: 68px;
+  object-fit: contain;
 }
 .brand strong {
   font-size: 13px;
