@@ -3,6 +3,7 @@ export type View =
   | "workspace"
   | "proof"
   | "geometry"
+  | "free"
   | "trigonometry"
   | "calculus"
   | "linear"

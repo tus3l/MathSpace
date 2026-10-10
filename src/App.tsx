@@ -35,6 +35,7 @@ import {
   AdvisorLab,
   CalculusLab,
   GeometryLab,
+  FreeGeometryWorkspace,
   PracticeLab,
   ProofLab,
   TrigLab,
@@ -83,6 +84,13 @@ const navigation: Navigation[] = [
     english: "Math Workspace",
     icon: ChartNoAxesCombined,
     color: "#7770ce",
+  },
+  {
+    id: "free",
+    title: "مساحة حرة",
+    english: "Free Workspace",
+    icon: ChartNoAxesCombined,
+    color: "#249b8d",
   },
   {
     id: "advisor",
@@ -197,12 +205,20 @@ const navigation: Navigation[] = [
     color: "#249b8d",
   },
 ];
-const sidebarViews: View[] = ["geometry", "three", "trigonometry"];
-const sidebarNavigation = sidebarViews.map(
-  (id) => navigation.find((item) => item.id === id)!,
+const sidebarViews: View[] = [
+  "free",
+  "advisor",
+  "geometry",
+  "three",
+  "trigonometry",
+];
+const sidebarNavigation = sidebarViews.map((id) =>
+  navigation.find((item) => item.id === id)!,
 );
 const libraryNavigation = navigation.filter(
-  (item) => item.id !== "library" && !sidebarViews.includes(item.id),
+  (item) =>
+    !["library", "practice"].includes(item.id) &&
+    !sidebarViews.includes(item.id),
 );
 export default function App() {
   const [view, setView] = useState<View>("workspace"),
@@ -296,6 +312,8 @@ export default function App() {
       <ProofLab />
     ) : view === "geometry" ? (
       <GeometryLab />
+    ) : view === "free" ? (
+      <FreeGeometryWorkspace />
     ) : view === "trigonometry" ? (
       <TrigLab />
     ) : view === "complex" ? (
@@ -342,7 +360,11 @@ export default function App() {
     <div className="app-shell">
       <aside className={`sidebar ${drawer ? "open" : ""}`}>
         <button className="brand" onClick={() => navigate("home")}>
-          <img className="brand-logo" src="/logo.png" alt="شعار تخيل فضاء الرياضيات" />
+          <img
+            className="brand-logo"
+            src="/logo.png"
+            alt="شعار تخيل فضاء الرياضيات"
+          />
           <span>
             <strong>تخيل فضاء الرياضيات</strong>
             <small>MATH SPACE</small>

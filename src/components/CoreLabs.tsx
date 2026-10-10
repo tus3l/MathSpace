@@ -13,6 +13,9 @@ import {
 } from "lucide-react";
 import { Formula, MathInput, Slider, Timeline, Why } from "./Controls";
 import { Graph } from "./Graph";
+import { LearningPanel } from "./LearningPanel";
+import { verifyTransition } from "../engine/learning";
+import type { Verdict } from "../engine/learning";
 import {
   analyze,
   checkStep,
@@ -28,6 +31,7 @@ import {
   prepareVisualExpression,
   prepareWorkspaceVisual,
   visualInputParameters,
+  resolveVisualInput,
 } from "../engine/visual";
 import type { VisualParameter } from "../engine/visual";
 import { functionFamilies } from "../content/knowledge";
@@ -526,7 +530,7 @@ export function ProofLab() {
     </>
   );
 }
-function FreeGeometryWorkspace() {
+export function FreeGeometryWorkspace() {
   const [equations, setEquations] = useState<
     {
       id: string;
@@ -539,6 +543,34 @@ function FreeGeometryWorkspace() {
   const [editing, setEditing] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [scope, setScope] = useState({ a: 1, b: 1, c: 0 });
+  const [selectedId, setSelectedId] = useState("");
+  const [candidate, setCandidate] = useState("");
+  const [review, setReview] = useState<{
+    source: string;
+    candidate: string;
+    verdict: Verdict;
+  } | null>(null);
+  const [preview, setPreview] = useState<{
+    source: string;
+    expression: string;
+    reason: string;
+  } | null>(null);
+  const selected =
+    equations.find((equation) => equation.id === selectedId) ?? equations[0];
+  let source = selected?.expression ?? "";
+  try {
+    if (source) source = resolveVisualInput(source, scope);
+  } catch {
+    source = selected?.expression ?? "";
+  }
+  const previewVisual = useMemo(() => {
+    if (!preview || preview.source !== source) return null;
+    try {
+      return prepareWorkspaceVisual(preview.expression, scope);
+    } catch {
+      return null;
+    }
+  }, [preview, source, scope]);
   const visuals = useMemo(
     () =>
       equations
@@ -566,7 +598,13 @@ function FreeGeometryWorkspace() {
   const parameters = [
     ...new Set(
       equations.flatMap((equation) =>
-        visualInputParameters(equation.expression),
+        (() => {
+          try {
+            return visualInputParameters(equation.expression);
+          } catch {
+            return [];
+          }
+        })(),
       ),
     ),
   ];
@@ -577,209 +615,342 @@ function FreeGeometryWorkspace() {
     setError("");
   }
   return (
-    <div className="free-geometry">
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          try {
-            prepareWorkspaceVisual(draft, scope);
-            const expression = normalize(draft);
-            setEquations((current) =>
-              editing
-                ? current.map((equation) =>
-                    equation.id === editing
-                      ? { ...equation, expression }
-                      : equation,
-                  )
-                : [
-                    ...current,
-                    {
-                      id: crypto.randomUUID(),
-                      expression,
-                      color: palette[current.length % palette.length],
-                      visible: true,
-                    },
-                  ],
-            );
-            cancelEdit();
-          } catch (failure) {
-            setError(
-              failure instanceof Error ? failure.message : "تعذر رسم المعادلة.",
-            );
-          }
-        }}
-      >
-        <MathInput
-          label="معادلة المساحة الحرة"
-          value={draft}
-          onChange={setDraft}
-          variables={["x", "y", "a", "b", "c"]}
-          keyboardInitiallyOpen={false}
-          required
-        />
-        <div className="free-equation-actions">
-          <button className="button secondary" type="submit">
-            {editing ? <Check size={16} /> : <Plus size={16} />}
-            {editing ? "حفظ التعديل" : "إضافة معادلة"}
-          </button>
-          {editing && (
-            <button
-              className="icon-button"
-              type="button"
-              title="إلغاء التعديل"
-              aria-label="إلغاء التعديل"
-              onClick={cancelEdit}
-            >
-              <X size={16} />
-            </button>
-          )}
-          <button
-            className="icon-button"
-            type="button"
-            title="مسح المساحة"
-            aria-label="مسح المساحة"
-            disabled={!equations.length}
-            onClick={() => {
-              setEquations([]);
-              cancelEdit();
+    <>
+      <LabHeader english="FREE WORKSPACE" title="مساحة حرة" />
+      <section className="lab-stage">
+        <div className="free-geometry">
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              try {
+                const expression = normalize(draft);
+                if (!expression.trim() || expression.length > 250)
+                  throw new Error("اكتب مدخلًا لا يتجاوز 250 حرفًا.");
+                setEquations((current) =>
+                  editing
+                    ? current.map((equation) =>
+                        equation.id === editing
+                          ? { ...equation, expression }
+                          : equation,
+                      )
+                    : [
+                        ...current,
+                        {
+                          id: crypto.randomUUID(),
+                          expression,
+                          color: palette[current.length % palette.length],
+                          visible: true,
+                        },
+                      ],
+                );
+                cancelEdit();
+              } catch (failure) {
+                setError(
+                  failure instanceof Error
+                    ? failure.message
+                    : "تعذر رسم المعادلة.",
+                );
+              }
             }}
           >
-            <Trash2 size={16} />
-          </button>
-        </div>
-      </form>
-      {error && (
-        <p className="error-message" role="alert">
-          {error}
-        </p>
-      )}
-      {equations.length > 0 && (
-        <ul className="free-equation-list">
-          {equations.map((equation, index) => (
-            <li key={equation.id} className="free-equation-row">
-              <input
-                type="checkbox"
-                aria-label={`عرض المعادلة ${index + 1}`}
-                checked={equation.visible}
-                onChange={(event) =>
-                  setEquations((current) =>
-                    current.map((item) =>
-                      item.id === equation.id
-                        ? { ...item, visible: event.target.checked }
-                        : item,
-                    ),
-                  )
-                }
-              />
-              <input
-                type="color"
-                aria-label={`لون المعادلة ${index + 1}`}
-                value={equation.color}
-                onChange={(event) =>
-                  setEquations((current) =>
-                    current.map((item) =>
-                      item.id === equation.id
-                        ? { ...item, color: event.target.value }
-                        : item,
-                    ),
-                  )
-                }
-              />
-              <code dir="ltr">{equation.expression}</code>
-              <button
-                className="icon-button"
-                type="button"
-                title={`تعديل المعادلة ${index + 1}`}
-                aria-label={`تعديل المعادلة ${index + 1}`}
-                onClick={() => {
-                  setDraft(equation.expression);
-                  setEditing(equation.id);
-                  setError("");
-                }}
-              >
-                <Pencil size={16} />
+            <MathInput
+              label="معادلة المساحة الحرة"
+              value={draft}
+              onChange={setDraft}
+              variables={["x", "y", "a", "b", "c"]}
+              keyboardInitiallyOpen={false}
+              required
+            />
+            <div className="free-equation-actions">
+              <button className="button secondary" type="submit">
+                {editing ? <Check size={16} /> : <Plus size={16} />}
+                {editing ? "حفظ التعديل" : "إضافة معادلة"}
               </button>
+              {editing && (
+                <button
+                  className="icon-button"
+                  type="button"
+                  title="إلغاء التعديل"
+                  aria-label="إلغاء التعديل"
+                  onClick={cancelEdit}
+                >
+                  <X size={16} />
+                </button>
+              )}
               <button
                 className="icon-button"
                 type="button"
-                title={`حذف المعادلة ${index + 1}`}
-                aria-label={`حذف المعادلة ${index + 1}`}
+                title="مسح المساحة"
+                aria-label="مسح المساحة"
+                disabled={!equations.length}
                 onClick={() => {
-                  setEquations((current) =>
-                    current.filter((item) => item.id !== equation.id),
-                  );
-                  if (editing === equation.id) cancelEdit();
+                  setEquations([]);
+                  setSelectedId("");
+                  setPreview(null);
+                  setReview(null);
+                  setCandidate("");
+                  cancelEdit();
                 }}
               >
                 <Trash2 size={16} />
               </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      {parameters.length > 0 && (
-        <div className="visual-parameter-controls">
-          {parameters.map((parameter) => (
-            <Slider
-              key={parameter}
-              label={parameter}
-              min={-10}
-              max={10}
-              step={0.1}
-              value={scope[parameter]}
-              onChange={(value) =>
-                setScope((current) => ({ ...current, [parameter]: value }))
-              }
-            />
-          ))}
-        </div>
-      )}
-      {visuals
-        .filter((item) => item.error)
-        .map((item) => (
-          <p className="error-message" role="alert" key={item.equation.id}>
-            <code dir="ltr">{item.equation.expression}</code>: {item.error}
-          </p>
-        ))}
-      <Graph
-        autoFit
-        autoFitKey={equations
-          .filter((equation) => equation.visible)
-          .map((equation) => equation.id)
-          .join(",")}
-        scope={scope}
-        curves={visuals.flatMap(
-          ({ equation, visual }) =>
-            visual?.expressions.map((expression) => ({
-              expression,
-              color: equation.color,
-              label: equation.expression,
-            })) ?? [],
-        )}
-        points={visuals.flatMap(
-          ({ equation, visual }) =>
-            visual?.points.map((point) => ({
-              ...point,
-              color: equation.color,
-            })) ?? [],
-        )}
-        segments={visuals.flatMap(
-          ({ equation, visual }) =>
-            visual?.segments.map((segment) => ({
-              ...segment,
-              color: equation.color,
-            })) ?? [],
-        )}
-      />
-      {visuals.map(
-        ({ equation, visual }) =>
-          visual && (
-            <p className="visual-caption" key={equation.id}>
-              {visual.kind}: {visual.description}
+            </div>
+          </form>
+          {error && (
+            <p className="error-message" role="alert">
+              {error}
             </p>
-          ),
-      )}
-    </div>
+          )}
+          {equations.length > 0 && (
+            <ul className="free-equation-list">
+              {equations.map((equation, index) => (
+                <li key={equation.id} className="free-equation-row">
+                  <input
+                    type="checkbox"
+                    aria-label={`عرض المعادلة ${index + 1}`}
+                    checked={equation.visible}
+                    onChange={(event) =>
+                      setEquations((current) =>
+                        current.map((item) =>
+                          item.id === equation.id
+                            ? { ...item, visible: event.target.checked }
+                            : item,
+                        ),
+                      )
+                    }
+                  />
+                  <input
+                    type="color"
+                    aria-label={`لون المعادلة ${index + 1}`}
+                    value={equation.color}
+                    onChange={(event) =>
+                      setEquations((current) =>
+                        current.map((item) =>
+                          item.id === equation.id
+                            ? { ...item, color: event.target.value }
+                            : item,
+                        ),
+                      )
+                    }
+                  />
+                  <code dir="ltr">{equation.expression}</code>
+                  <button
+                    className="icon-button"
+                    type="button"
+                    title={`تعديل المعادلة ${index + 1}`}
+                    aria-label={`تعديل المعادلة ${index + 1}`}
+                    onClick={() => {
+                      setDraft(equation.expression);
+                      setEditing(equation.id);
+                      setError("");
+                    }}
+                  >
+                    <Pencil size={16} />
+                  </button>
+                  <button
+                    className="icon-button"
+                    type="button"
+                    title={`حذف المعادلة ${index + 1}`}
+                    aria-label={`حذف المعادلة ${index + 1}`}
+                    onClick={() => {
+                      setEquations((current) =>
+                        current.filter((item) => item.id !== equation.id),
+                      );
+                      if (editing === equation.id) cancelEdit();
+                    }}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {equations.length > 0 && (
+            <>
+              <label className="field-label">
+                المسألة الحالية
+                <select
+                  className="full-select"
+                  aria-label="المسألة الحالية في المساحة الحرة"
+                  value={selected?.id ?? ""}
+                  onChange={(event) => {
+                    setSelectedId(event.target.value);
+                    setPreview(null);
+                  }}
+                >
+                  {equations.map((equation, index) => (
+                    <option key={equation.id} value={equation.id}>
+                      {index + 1}. {equation.expression}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <LearningPanel
+                source={source}
+                graphDescription={
+                  visuals.find((item) => item.equation.id === selected?.id)
+                    ?.visual?.description ?? "لا يتوفر رسم مدعوم لهذا المدخل."
+                }
+                values={scope}
+                activity={equations.map((equation) => equation.expression)}
+                running={false}
+                showAnimation={false}
+                customReview={
+                  review?.source === source && review.candidate === candidate
+                    ? review
+                    : null
+                }
+                onPlay={() => {}}
+                onReset={() => setPreview(null)}
+                onShowSteps={() => {}}
+                onClearPreview={() => setPreview(null)}
+                onPreview={(expression, _purpose, reason) =>
+                  setPreview({ source, expression, reason })
+                }
+              />
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  let resolved = candidate;
+                  try {
+                    resolved = resolveVisualInput(candidate, scope);
+                  } catch {
+                    resolved = candidate;
+                  }
+                  const verdict = verifyTransition(source, resolved);
+                  setReview({ source, candidate, verdict });
+                  setPreview({
+                    source,
+                    expression: resolved,
+                    reason: verdict.message,
+                  });
+                }}
+              >
+                <MathInput
+                  label="قانون أو تحويل جديد للمسألة الحالية"
+                  value={candidate}
+                  onChange={setCandidate}
+                  variables={["x", "y", "a", "b", "c"]}
+                  keyboardInitiallyOpen={false}
+                  required
+                />
+                <button className="button secondary" type="submit">
+                  <Check size={16} /> فحص القانون الجديد
+                </button>
+              </form>
+              {review &&
+                review.source === source &&
+                review.candidate === candidate && (
+                  <div
+                    className={`learning-verdict ${review.verdict.valid === false ? "incorrect" : ""}`}
+                    role="status"
+                  >
+                    <strong>
+                      {review.verdict.valid === true
+                        ? "التحويل صحيح للمسألة الحالية"
+                        : review.verdict.valid === false
+                          ? "التحويل غير صحيح للمسألة الحالية"
+                          : "لم يتمكن المستشار من التحقق"}
+                    </strong>
+                    <code dir="ltr">{review.candidate}</code>
+                    <p>{review.verdict.message}</p>
+                  </div>
+                )}
+            </>
+          )}
+          {parameters.length > 0 && (
+            <div className="visual-parameter-controls">
+              {parameters.map((parameter) => (
+                <Slider
+                  key={parameter}
+                  label={parameter}
+                  min={-10}
+                  max={10}
+                  step={0.1}
+                  value={scope[parameter]}
+                  onChange={(value) =>
+                    setScope((current) => ({ ...current, [parameter]: value }))
+                  }
+                />
+              ))}
+            </div>
+          )}
+          {visuals
+            .filter((item) => item.error)
+            .map((item) => (
+              <p className="error-message" role="alert" key={item.equation.id}>
+                <code dir="ltr">{item.equation.expression}</code>: {item.error}
+              </p>
+            ))}
+          <Graph
+            autoFit
+            autoFitKey={equations
+              .filter((equation) => equation.visible)
+              .map((equation) => equation.id)
+              .join(",")}
+            scope={scope}
+            curves={visuals
+              .flatMap(
+                ({ equation, visual }) =>
+                  visual?.expressions.map((expression) => ({
+                    expression,
+                    color: equation.color,
+                    label: equation.expression,
+                  })) ?? [],
+              )
+              .concat(
+                previewVisual?.expressions.map((expression) => ({
+                  expression,
+                  color: "#d55a78",
+                  label: "محاولة القانون",
+                })) ?? [],
+              )}
+            points={visuals
+              .flatMap(
+                ({ equation, visual }) =>
+                  visual?.points.map((point) => ({
+                    ...point,
+                    color: equation.color,
+                  })) ?? [],
+              )
+              .concat(
+                previewVisual?.points.map((point) => ({
+                  ...point,
+                  color: "#d55a78",
+                })) ?? [],
+              )}
+            segments={visuals
+              .flatMap(
+                ({ equation, visual }) =>
+                  visual?.segments.map((segment) => ({
+                    ...segment,
+                    color: equation.color,
+                  })) ?? [],
+              )
+              .concat(
+                previewVisual?.segments.map((segment) => ({
+                  ...segment,
+                  color: "#d55a78",
+                })) ?? [],
+              )}
+          />
+          {preview && preview.source === source && (
+            <p className="visual-caption">
+              {preview.reason}
+              {!previewVisual && " لا يتوفر تمثيل بياني مدعوم لهذه المحاولة."}
+            </p>
+          )}
+          {visuals.map(
+            ({ equation, visual }) =>
+              visual && (
+                <p className="visual-caption" key={equation.id}>
+                  {visual.kind}: {visual.description}
+                </p>
+              ),
+          )}
+        </div>
+      </section>
+    </>
   );
 }
 
@@ -825,7 +996,6 @@ export function GeometryLab() {
                 ["rectangle", "مستطيل"],
                 ["triangle", "مثلث"],
                 ["segment", "قطعة"],
-                ["free", "مساحة حرة"],
               ].map(([id, name]) => (
                 <button
                   key={id}
@@ -836,9 +1006,6 @@ export function GeometryLab() {
                 </button>
               ))}
             </div>
-          </div>
-          <div hidden={shape !== "free"}>
-            <FreeGeometryWorkspace />
           </div>
           <div hidden={shape === "free"}>
             <div className="geometry-stage">

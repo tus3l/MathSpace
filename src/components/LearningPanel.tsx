@@ -33,6 +33,8 @@ type Props = {
   values: Record<string, number>;
   activity: string[];
   running: boolean;
+  showAnimation?: boolean;
+  customReview?: { candidate: string; verdict: Verdict } | null;
   onPlay: () => void;
   onReset: () => void;
   onShowSteps: () => void;
@@ -50,6 +52,8 @@ export function LearningPanel({
   values,
   activity,
   running,
+  showAnimation = true,
+  customReview,
   onPlay,
   onReset,
   onShowSteps,
@@ -122,10 +126,12 @@ export function LearningPanel({
         >
           <Lightbulb size={16} /> المستشار
         </button>
-        <button onClick={onPlay} aria-pressed={running}>
-          {running ? <Square size={16} /> : <Play size={16} />}
-          {running ? "إيقاف الحركة" : "تشغيل الحركة"}
-        </button>
+        {showAnimation && (
+          <button onClick={onPlay} aria-pressed={running}>
+            {running ? <Square size={16} /> : <Play size={16} />}
+            {running ? "إيقاف الحركة" : "تشغيل الحركة"}
+          </button>
+        )}
         <button onClick={onReset}>
           <RotateCcw size={16} /> إعادة ضبط
         </button>
@@ -345,6 +351,22 @@ export function LearningPanel({
           )}
           {panel === "advisor" && (
             <>
+              {customReview && (
+                <div
+                  className={`learning-verdict ${customReview.verdict.valid === false ? "incorrect" : ""}`}
+                  role="status"
+                >
+                  <strong>
+                    {customReview.verdict.valid === true
+                      ? "التحويل الجديد صحيح للمسألة الحالية"
+                      : customReview.verdict.valid === false
+                        ? "التحويل الجديد غير صحيح للمسألة الحالية"
+                        : "التحويل الجديد غير متحقق منه"}
+                  </strong>
+                  <code dir="ltr">{customReview.candidate}</code>
+                  <p>{customReview.verdict.message}</p>
+                </div>
+              )}
               <div
                 className={`learning-verdict ${firstError !== -1 || final.valid === false || attempt?.valid === false ? "incorrect" : ""}`}
                 role="status"
