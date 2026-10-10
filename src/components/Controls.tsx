@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { RefObject } from "react";
 import {
   CircleHelp,
   Play,
@@ -7,9 +8,19 @@ import {
   SkipForward,
   RotateCcw,
   Eraser,
+  Delete,
+  ChevronLeft,
+  ChevronRight,
+  Keyboard,
 } from "lucide-react";
 import katex from "katex";
 import { mathRequest, normalize, safeParse } from "../engine/math";
+import {
+  deleteMathSelection,
+  insertMathKey,
+  mathKeyGroups,
+} from "./mathKeyboard";
+import type { MathKey } from "./mathKeyboard";
 
 export function MathInput({
   value,
@@ -17,22 +28,29 @@ export function MathInput({
   label,
   required = false,
   variables = ["x"],
+  inputRef: externalInputRef,
 }: {
   value: string;
   onChange: (value: string) => void;
   label: string;
   required?: boolean;
   variables?: string[];
+  inputRef?: RefObject<HTMLInputElement | null>;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const localInputRef = useRef<HTMLInputElement>(null);
+  const inputRef = externalInputRef ?? localInputRef;
+  const [group, setGroup] = useState(0);
+  const [keyboardOpen, setKeyboardOpen] = useState(true);
+  const [editError, setEditError] = useState("");
   let preview = "";
   try {
     const request = mathRequest(value);
     if (request.operation) {
       const expression = safeParse(request.expression).toTex();
-      preview = request.operation === "integral"
-        ? `\\int ${expression}\\,dx`
-        : `\\frac{d}{dx}\\left(${expression}\\right)`;
+      preview =
+        request.operation === "integral"
+          ? `\\int ${expression}\\,dx`
+          : `\\frac{d}{dx}\\left(${expression}\\right)`;
     } else {
       const sides = normalize(value).split("=");
       if (sides.length <= 2)
@@ -41,23 +59,27 @@ export function MathInput({
   } catch {
     preview = "";
   }
-  function insert(prefix: string, suffix = "", fallback = "x", operation = false) {
+  function restoreSelection(start: number, end = start) {
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.setSelectionRange(start, end);
+    });
+  }
+  function insert(key: MathKey) {
     const input = inputRef.current;
     if (!input) return;
-    let start = input.selectionStart ?? value.length;
-    let end = input.selectionEnd ?? start;
-    let selected = value.slice(start, end);
-    if (operation) {
-      start = 0;
-      end = value.length;
-      selected = value.includes("=") ? "" : value;
+    const start = input.selectionStart ?? value.length;
+    const end = input.selectionEnd ?? start;
+    try {
+      const next = insertMathKey(value, start, end, key);
+      onChange(next.value);
+      setEditError("");
+      restoreSelection(next.start, next.end);
+    } catch (error) {
+      setEditError(
+        error instanceof Error ? error.message : "تعذر إدراج الرمز.",
+      );
     }
-    const body = fallback === "" ? "" : selected || fallback;
-    onChange(value.slice(0, start) + prefix + body + suffix + value.slice(end));
-    requestAnimationFrame(() => {
-      input.focus();
-      input.setSelectionRange(start + prefix.length, start + prefix.length + body.length);
-    });
   }
   return (
     <div className="math-input-control">
@@ -66,47 +88,174 @@ export function MathInput({
         aria-label={label}
         dir="ltr"
         value={value}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={(event) => {
+          onChange(event.target.value);
+          setEditError("");
+        }}
         spellCheck={false}
         autoCapitalize="off"
         autoComplete="off"
         required={required}
         maxLength={250}
       />
-      <div className="math-symbols" role="toolbar" aria-label={`رموز ${label}`} dir="ltr">
-        {[
-          { title: "الجيب", latex: "\\sin", prefix: "sin(", suffix: ")" },
-          { title: "جيب التمام", latex: "\\cos", prefix: "cos(", suffix: ")" },
-          { title: "الظل", latex: "\\tan", prefix: "tan(", suffix: ")" },
-          { title: "الجذر التربيعي", latex: "\\sqrt{x}", prefix: "sqrt(", suffix: ")" },
-          { title: "التربيع", latex: "x^2", prefix: "(", suffix: ")^2" },
-          { title: "قوة", latex: "x^n", prefix: "(", suffix: ")^3" },
-          { title: "كسر", latex: "\\frac{x}{y}", prefix: "(", suffix: ")/(1)" },
-          { title: "القيمة المطلقة", latex: "|x|", prefix: "abs(", suffix: ")" },
-          { title: "اللوغاريتم الطبيعي", latex: "\\ln", prefix: "ln(", suffix: ")" },
-          { title: "اللوغاريتم العشري", latex: "\\log_{10}", prefix: "log10(", suffix: ")" },
-          { title: "الدالة الأسية", latex: "e^x", prefix: "exp(", suffix: ")" },
-          { title: "تكامل غير محدد بالنسبة إلى x", latex: "\\int", prefix: "∫ (", suffix: ") dx", operation: true },
-          { title: "اشتقاق بالنسبة إلى x", latex: "\\frac{d}{dx}", prefix: "derivative(", suffix: ")", operation: true },
-        ].map((symbol) => (
-          <button key={symbol.title} type="button" title={symbol.title} aria-label={symbol.title}
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => insert(symbol.prefix, symbol.suffix, "x", symbol.operation)}>
-            <Formula value={symbol.latex} />
-          </button>
-        ))}
-        {[...variables, "π", "e"].map((symbol) => (
-          <button key={symbol} type="button" title={symbol === "π" ? "باي" : symbol} aria-label={symbol === "π" ? "باي" : `إدراج ${symbol}`}
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => insert(symbol, "", "")}>
-            <Formula value={symbol === "π" ? "\\pi" : symbol} />
-          </button>
-        ))}
-        <button type="button" title="مسح الإدخال" aria-label="مسح الإدخال"
-          onClick={() => { onChange(""); inputRef.current?.focus(); }}>
-          <Eraser size={16} />
+      <div className="math-keyboard-heading">
+        <button
+          type="button"
+          className="math-keyboard-toggle"
+          aria-expanded={keyboardOpen}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => setKeyboardOpen(!keyboardOpen)}
+        >
+          <Keyboard size={16} />{" "}
+          {keyboardOpen ? "إخفاء اللوحة الرياضية" : "إظهار اللوحة الرياضية"}
         </button>
+        <span>حدّد جزءًا من التعبير لتطبيق قالب عليه</span>
       </div>
+      {keyboardOpen && (
+        <div className="math-keyboard" aria-label={`لوحة ${label}`}>
+          <div
+            className="math-keyboard-categories"
+            aria-label="أقسام اللوحة الرياضية"
+          >
+            {[
+              ...mathKeyGroups.map((item) => item.title),
+              "المتغيرات والثوابت",
+            ].map((title, index) => (
+              <button
+                key={title}
+                type="button"
+                aria-pressed={group === index}
+                className={group === index ? "active" : ""}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => setGroup(index)}
+              >
+                {title}
+              </button>
+            ))}
+          </div>
+          <div
+            className="math-symbols"
+            role="group"
+            aria-label={`رموز ${label}`}
+            dir="ltr"
+          >
+            {(
+              mathKeyGroups[group]?.keys ?? [
+                ...Array.from(new Set([...variables, "π", "e"])).map(
+                  (symbol) => ({
+                    title: symbol === "π" ? "باي" : `إدراج ${symbol}`,
+                    latex: symbol === "π" ? "\\pi" : symbol,
+                    prefix: symbol,
+                    fallback: "",
+                  }),
+                ),
+              ]
+            ).map((key) => (
+              <button
+                key={key.title}
+                type="button"
+                title={key.title}
+                aria-label={key.title}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => insert(key)}
+              >
+                <Formula value={key.latex} />
+              </button>
+            ))}
+          </div>
+          <div className="math-keyboard-footer">
+            <small>
+              {group === 2
+                ? "الزوايا بالراديان؛ استخدم زر التحويل للدرجات."
+                : group === 4
+                  ? "العمليات على التعبير كاملًا وبالنسبة إلى x؛ التكامل المحدد والنهايات غير مدعومين هنا."
+                  : group === 1
+                    ? "استبدل القيم داخل القالب؛ الجذور الكسرية للقيم غير السالبة."
+                    : "يمكن تعديل القوالب والأرقام مباشرة من حقل الإدخال."}
+            </small>
+            <div className="math-keyboard-actions" dir="ltr">
+              {[-1, 1].map((direction) => (
+                <button
+                  key={direction}
+                  type="button"
+                  title={
+                    direction < 0
+                      ? "تحريك المؤشر لليسار"
+                      : "تحريك المؤشر لليمين"
+                  }
+                  aria-label={
+                    direction < 0
+                      ? "تحريك المؤشر لليسار"
+                      : "تحريك المؤشر لليمين"
+                  }
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => {
+                    const input = inputRef.current;
+                    if (!input) return;
+                    const start = input.selectionStart ?? 0;
+                    const end = input.selectionEnd ?? start;
+                    restoreSelection(
+                      start !== end
+                        ? direction < 0
+                          ? start
+                          : end
+                        : Math.max(
+                            0,
+                            Math.min(value.length, start + direction),
+                          ),
+                    );
+                  }}
+                >
+                  {direction < 0 ? (
+                    <ChevronLeft size={16} />
+                  ) : (
+                    <ChevronRight size={16} />
+                  )}
+                </button>
+              ))}
+              <button
+                type="button"
+                title="حذف الحرف السابق أو التحديد"
+                aria-label="حذف الحرف السابق أو التحديد"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => {
+                  const input = inputRef.current;
+                  if (!input) return;
+                  const start = input.selectionStart ?? value.length;
+                  const next = deleteMathSelection(
+                    value,
+                    start,
+                    input.selectionEnd ?? start,
+                  );
+                  onChange(next.value);
+                  setEditError("");
+                  restoreSelection(next.start);
+                }}
+              >
+                <Delete size={16} />
+              </button>
+              <button
+                type="button"
+                title="مسح الإدخال"
+                aria-label="مسح الإدخال"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => {
+                  onChange("");
+                  setEditError("");
+                  restoreSelection(0);
+                }}
+              >
+                <Eraser size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {editError && (
+        <p className="math-keyboard-error" role="alert">
+          {editError}
+        </p>
+      )}
       <div className="math-input-preview" aria-label={`معاينة ${label}`}>
         {preview && <Formula value={preview} />}
       </div>

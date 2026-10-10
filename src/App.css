@@ -306,26 +306,100 @@
   width: 100%;
 }
 .math-symbols {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 8px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(48px, 1fr));
+  gap: 6px;
+  padding: 12px;
 }
 .math-symbols > button {
   min-width: 40px;
-  height: 36px;
+  min-height: 44px;
   padding: 4px 8px;
   border: 1px solid var(--line);
   border-radius: 4px;
   color: var(--text);
   background: var(--surface-alt);
 }
-.math-symbols > button:hover {
+.math-symbols > button:hover,
+.math-symbols > button:focus-visible {
   border-color: var(--accent);
   background: var(--accent-soft);
 }
 .math-symbols .formula {
-  font-size: 13px;
+  font-size: 15px;
+}
+.math-keyboard-heading,
+.math-keyboard-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.math-keyboard-heading {
+  margin-top: 8px;
+}
+.math-keyboard-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent);
+  padding: 6px 0;
+}
+.math-keyboard {
+  margin-top: 6px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  overflow: hidden;
+}
+.math-keyboard-categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px;
+  background: var(--surface-alt);
+  border-bottom: 1px solid var(--line);
+}
+.math-keyboard-categories > button {
+  padding: 7px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--subtle);
+}
+.math-keyboard-categories > button.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.math-keyboard-footer {
+  padding: 8px 12px;
+  border-top: 1px solid var(--line);
+}
+.math-keyboard-footer small {
+  flex: 1;
+  min-width: 140px;
+}
+.math-keyboard-actions {
+  display: flex;
+  gap: 4px;
+}
+.math-keyboard-actions > button {
+  display: grid;
+  place-items: center;
+  min-width: 36px;
+  min-height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--subtle);
+}
+.math-keyboard-actions > button:hover {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.math-keyboard-error {
+  color: var(--text);
+  font-size: 12px;
 }
 .math-input-preview {
   min-height: 38px;
@@ -418,6 +492,12 @@
   border: 1px solid var(--line);
   border-radius: 7px;
   overflow: hidden;
+}
+.visual-parameter-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 18px;
+  margin: 12px 0;
 }
 .graph-toolbar {
   min-height: 47px;

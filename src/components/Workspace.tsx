@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   ArrowLeft,
   Bookmark,
@@ -38,6 +38,7 @@ export function Workspace({
   bookmarks,
   toggleBookmark,
 }: Props) {
+  const equationRef = useRef<HTMLInputElement>(null);
   const [input, setInput] = useState(initial || "x^2 + 5x + 6 = 0");
   const [analysis, setAnalysis] = useState<Analysis>(() =>
     analyze(initial || "x^2 + 5x + 6 = 0"),
@@ -113,7 +114,7 @@ export function Workspace({
       color: "#249b8d",
     });
   }
-  function submit(expression = input) {
+  function submit(expression = input, save = true) {
     const next = analyze(expression);
     setInput(expression);
     setAnalysis(next);
@@ -123,7 +124,7 @@ export function Workspace({
     setError("");
     setInspector(null);
     if (next.supported) {
-      onSave(expression, "problem");
+      if (save) onSave(expression, "problem");
       try {
         const [c, b, a] = coefficients(expression);
         setParameters({ a, b, c });
@@ -176,6 +177,7 @@ export function Workspace({
       <MathTools
         expression={input}
         onApply={submit}
+        onWrite={() => equationRef.current?.focus()}
         presets={[
           { title: "المعادلة التربيعية", expression: "x^2+5*x+6=0", topicId: "quadratic" },
           { title: "الدوال والتحويلات", expression: "(x-2)^2+3", topicId: "functions" },
@@ -192,9 +194,10 @@ export function Workspace({
       >
         <div className="equation-marker">ƒ</div>
         <MathInput
+          inputRef={equationRef}
           label="المعادلة"
           value={input}
-          onChange={setInput}
+          onChange={(value) => submit(value, false)}
         />
         <span className="entry-type">Math input</span>
         <button className="button primary" type="submit">

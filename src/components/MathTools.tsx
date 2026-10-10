@@ -22,12 +22,16 @@ export function MathTools({
   onApply,
   variables,
   defaultPanel = null,
+  onWrite,
+  onLiveChange,
 }: {
   expression: string;
   presets: LawPreset[];
   onApply: (expression: string) => void;
   variables?: string[];
   defaultPanel?: "library" | "advisor" | "write" | null;
+  onWrite?: () => void;
+  onLiveChange?: (expression: string) => void;
 }) {
   const [panel, setPanel] = useState<"library" | "advisor" | "write" | null>(
     defaultPanel,
@@ -65,6 +69,11 @@ export function MathTools({
           className={panel === "write" ? "active" : ""}
           aria-expanded={panel === "write"}
           onClick={() => {
+            if (onWrite) {
+              setPanel(null);
+              onWrite();
+              return;
+            }
             setDraft(expression);
             setPanel(panel === "write" ? null : "write");
           }}
@@ -135,14 +144,21 @@ export function MathTools({
             <MathInput
               label="التعبير المخصص"
               value={draft}
-              onChange={setDraft}
+              onChange={(value) => {
+                setDraft(value);
+                onLiveChange?.(value);
+              }}
               variables={variables}
               required
             />
           </label>
-          <button className="button primary" type="submit">
-            <ArrowLeft size={16} /> تطبيق التعبير
-          </button>
+          {onLiveChange ? (
+            <p role="status">يتحدث الرسم مباشرة عند تعديل التعبير.</p>
+          ) : (
+            <button className="button primary" type="submit">
+              <ArrowLeft size={16} /> تطبيق التعبير
+            </button>
+          )}
         </form>
       )}
       {panel === "advisor" && analysis && (

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Grid2X2,
   Maximize,
@@ -8,6 +8,7 @@ import {
   Download,
 } from "lucide-react";
 import { compileFunction, fmt } from "../engine/math";
+import { useGraphTransition } from "./useGraphTransition";
 
 export type Curve = {
   expression: string;
@@ -48,11 +49,100 @@ export function Graph({
     span: domain[1] - domain[0],
   });
   const [grid, setGrid] = useState(true);
+  const compiledCurves = useMemo(
+    () =>
+      curves.map((curve) => {
+        try {
+          return {
+            ...curve,
+            evaluate: compileFunction(curve.expression),
+            error: null,
+          };
+        } catch (error) {
+          return {
+            ...curve,
+            evaluate: null,
+            error:
+              error instanceof Error ? error.message : "تعذر قراءة الدالة.",
+          };
+        }
+      }),
+    [curves],
+  );
+  const auxiliary = useMemo(
+    () =>
+      [rectangles?.expression, tangent?.expression].map((expression) => {
+        if (!expression) return { evaluate: null, error: null };
+        try {
+          return { evaluate: compileFunction(expression), error: null };
+        } catch (error) {
+          return {
+            evaluate: null,
+            error:
+              error instanceof Error ? error.message : "تعذر قراءة الدالة.",
+          };
+        }
+      }),
+    [rectangles?.expression, tangent?.expression],
+  );
+  const graphErrors = [...compiledCurves, ...auxiliary].flatMap((curve) =>
+    curve.error ? [curve.error] : [],
+  );
+  const transition = useGraphTransition(
+    [...compiledCurves, ...auxiliary].map((curve) => curve.evaluate),
+    scope,
+    points,
+    JSON.stringify([
+      curves.map((curve) => curve.expression),
+      scope,
+      points,
+      rectangles,
+      tangent,
+    ]),
+    viewport.x - viewport.span / 2,
+    viewport.x + viewport.span / 2,
+  );
+  const undefinedCurves = useMemo(
+    () =>
+      compiledCurves
+        .filter((curve) => {
+          const evaluate = curve.evaluate;
+          if (!evaluate) return false;
+          return !Array.from(
+            { length: 101 },
+            (_, index) =>
+              viewport.x - viewport.span / 2 + (index * viewport.span) / 100,
+          ).some((x) => Number.isFinite(evaluate(x, scope)));
+        })
+        .map((curve) => curve.label ?? curve.expression),
+    [compiledCurves, scope, viewport],
+  );
+  const curveSignature = curves.map((curve) => curve.expression).join("\0");
+  const [previousSignature, setPreviousSignature] = useState(curveSignature);
   const [inspected, setInspected] = useState<{
     x: number;
     y: number;
     slope: number;
   } | null>(null);
+  if (previousSignature !== curveSignature) {
+    setPreviousSignature(curveSignature);
+    setInspected(null);
+  }
+  const inspectEvaluator = compiledCurves[0]?.evaluate;
+  const activeInspected = useMemo(
+    () =>
+      inspected && inspectEvaluator
+        ? {
+            x: inspected.x,
+            y: transition.evaluate(0, inspected.x),
+            slope:
+              (transition.evaluate(0, inspected.x + 0.0001) -
+                transition.evaluate(0, inspected.x - 0.0001)) /
+              0.0002,
+          }
+        : null,
+    [inspected, inspectEvaluator, transition],
+  );
   const drag = useRef<{
     x: number;
     y: number;
@@ -155,25 +245,27 @@ export function Graph({
     );
     if (rectangles) {
       try {
-        const evaluate = compileFunction(rectangles.expression),
+        const evaluate = (x: number) => transition.evaluate(curves.length, x),
           delta = (rectangles.to - rectangles.from) / rectangles.count;
         for (let index = 0; index < rectangles.count; index++) {
           const x = rectangles.from + index * delta,
-            y = evaluate(x + delta / 2, scope);
+            y = evaluate(x + delta / 2);
           if (!Number.isFinite(y)) continue;
+          const first = { x, y: 0 };
+          const last = { x: x + delta, y };
           context.fillStyle = "#259b8f28";
           context.strokeStyle = "#259b8f88";
           context.fillRect(
-            projectX(x),
-            Math.min(projectY(0), projectY(y)),
-            delta * scale,
-            Math.abs(y * scale),
+            projectX(first.x),
+            Math.min(projectY(first.y), projectY(last.y)),
+            (last.x - first.x) * scale,
+            Math.abs((last.y - first.y) * scale),
           );
           context.strokeRect(
-            projectX(x),
-            Math.min(projectY(0), projectY(y)),
-            delta * scale,
-            Math.abs(y * scale),
+            projectX(first.x),
+            Math.min(projectY(first.y), projectY(last.y)),
+            (last.x - first.x) * scale,
+            Math.abs((last.y - first.y) * scale),
           );
         }
       } catch {
@@ -211,21 +303,22 @@ export function Graph({
       context.stroke();
       context.setLineDash([]);
     };
-    curves.forEach((curve) => {
-      try {
-        const evaluate = compileFunction(curve.expression);
-        drawCurve((x) => evaluate(x, scope), curve.color, curve.dashed);
-      } catch {
-        /* Input owner displays parsing errors. */
-      }
+    compiledCurves.forEach((curve, index) => {
+      const evaluate = curve.evaluate;
+      if (evaluate)
+        drawCurve(
+          (x) => transition.evaluate(index, x),
+          curve.color,
+          curve.dashed,
+        );
     });
     if (tangent) {
       try {
-        const evaluate = compileFunction(tangent.expression),
-          y = evaluate(tangent.x, scope),
+        const evaluate = (x: number) =>
+            transition.evaluate(curves.length + 1, x),
+          y = evaluate(tangent.x),
           slope =
-            (evaluate(tangent.x + 0.0001, scope) -
-              evaluate(tangent.x - 0.0001, scope)) /
+            (evaluate(tangent.x + 0.0001) - evaluate(tangent.x - 0.0001)) /
             0.0002;
         drawCurve((x) => y + slope * (x - tangent.x), "#e88d49", true);
       } catch {
@@ -233,13 +326,13 @@ export function Graph({
       }
     }
     const allPoints = [
-      ...points,
-      ...(inspected
+      ...transition.points,
+      ...(activeInspected
         ? [
             {
-              ...inspected,
+              ...activeInspected,
               color: "#e88d49",
-              label: `(${fmt(inspected.x)}, ${fmt(inspected.y)})`,
+              label: `(${fmt(activeInspected.x)}, ${fmt(activeInspected.y)})`,
             },
           ]
         : []),
@@ -309,6 +402,9 @@ export function Graph({
     rectangles,
     inspected,
     scope,
+    compiledCurves,
+    transition,
+    activeInspected,
   ]);
   const zoom = (factor: number) =>
     setViewport((current) => ({
@@ -366,6 +462,11 @@ export function Graph({
           </button>
         </div>
       </div>
+      {graphErrors.length > 0 && (
+        <p className="error-message" role="alert">
+          {graphErrors.join(" ")}
+        </p>
+      )}
       <div className="graph-canvas-wrap" ref={wrapRef}>
         <canvas
           ref={canvasRef}
@@ -405,14 +506,23 @@ export function Graph({
                     size.width;
               try {
                 const evaluate = compileFunction(curves[0].expression),
-                  y = evaluate(x, scope),
+                  y = transition.evaluate(0, x),
                   slope =
-                    (evaluate(x + 0.0001, scope) -
-                      evaluate(x - 0.0001, scope)) /
+                    (transition.evaluate(0, x + 0.0001) -
+                      transition.evaluate(0, x - 0.0001)) /
                     0.0002;
                 const point = { x, y, slope };
                 setInspected(point);
-                onInspect?.(point);
+                if (onInspect) {
+                  onInspect({
+                    x,
+                    y: evaluate(x, scope),
+                    slope:
+                      (evaluate(x + 0.0001, scope) -
+                        evaluate(x - 0.0001, scope)) /
+                      0.0002,
+                  });
+                }
               } catch {
                 /* Unparseable curves have no inspectable points. */
               }
@@ -424,14 +534,20 @@ export function Graph({
           }}
         />
       </div>
+      {undefinedCurves.length > 0 && (
+        <p className="error-message" role="status">
+          لا توجد قيم حقيقية ضمن مجال العرض الحالي: {undefinedCurves.join("، ")}
+          . غيّر المعامل أو موضع العرض.
+        </p>
+      )}
       <div className="graph-footer">
         <span>
           <span className="status-dot" /> إحداثيات ديكارتية
         </span>
-        {inspected ? (
+        {activeInspected ? (
           <span className="mono" dir="ltr">
-            x: {fmt(inspected.x)} · y: {fmt(inspected.y)} · slope:{" "}
-            {fmt(inspected.slope)}
+            x: {fmt(activeInspected.x)} · y: {fmt(activeInspected.y)} · slope:{" "}
+            {fmt(activeInspected.slope)}
           </span>
         ) : (
           <span>

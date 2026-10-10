@@ -9,6 +9,8 @@ import { MathTools } from "./MathTools";
 
 export default function ThreeLab() {
   const mountRef = useRef<HTMLDivElement>(null);
+  const surfaceInputRef = useRef<HTMLInputElement>(null);
+  const focusSurfaceRef = useRef(false);
   const sceneRef = useRef<{
     scene: THREE.Scene;
     mesh: THREE.Mesh;
@@ -22,6 +24,12 @@ export default function ThreeLab() {
     [surfaceSource, setSurfaceSource] = useState("x^2+y^2"),
     [draft, setDraft] = useState("x^2+y^2"),
     [error, setError] = useState("");
+  useEffect(() => {
+    if (shape === "surface" && focusSurfaceRef.current) {
+      surfaceInputRef.current?.focus();
+      focusSurfaceRef.current = false;
+    }
+  }, [shape]);
   useEffect(() => {
     const mount = mountRef.current!;
     let renderer: THREE.WebGLRenderer;
@@ -266,7 +274,14 @@ export default function ThreeLab() {
       <MathTools
         expression={surfaceSource}
         variables={["x", "y"]}
-        defaultPanel="write"
+        onWrite={() => {
+          if (shape === "surface") {
+            surfaceInputRef.current?.focus();
+          } else {
+            focusSurfaceRef.current = true;
+            setShape("surface");
+          }
+        }}
         onApply={applySurface}
         presets={[
           { title: "القطع المكافئ الدائري", expression: "x^2+y^2" },
@@ -344,6 +359,7 @@ export default function ThreeLab() {
               <label className="field-label">
                 z =
                 <MathInput
+                  inputRef={surfaceInputRef}
                   label="دالة السطح"
                   value={draft}
                   onChange={setDraft}

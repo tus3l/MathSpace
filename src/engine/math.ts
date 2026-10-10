@@ -508,9 +508,10 @@ export function checkStep(before: string, after: string) {
 export function symbolic(
   expression: string,
   operation: "simplify" | "expand" | "factor" | "derivative" | "integral",
+  variables = ["x", "y"],
 ) {
   const normalized = normalize(expression);
-  safeParse(normalized, ["x", "y"]);
+  safeParse(normalized, variables);
   if (operation === "derivative") return derivative(normalized, "x").toString();
   if (operation === "simplify") return simplify(normalized).toString();
   const result =

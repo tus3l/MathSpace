@@ -14,13 +14,15 @@ import {
   checkStep,
   compileFunction,
   fmt,
-  mathRequest,
   normalize,
   safeParse,
   symbolic,
 } from "../engine/math";
 import { riemann } from "../engine/simulations";
 import { MathTools } from "./MathTools";
+import { prepareVisualExpression } from "../engine/visual";
+import type { VisualParameter } from "../engine/visual";
+import { functionFamilies } from "../content/knowledge";
 
 export function LabHeader({
   english,
@@ -68,13 +70,23 @@ export function ProofLab() {
     [b, setB] = useState(2),
     [current, setCurrent] = useState(0);
   const [proof, setProof] = useState("square");
-  const [customExpression, setCustomExpression] = useState("x^2");
+  const [customScope, setCustomScope] = useState({ a: 3, b: 2, c: 0 });
+  const [custom, setCustom] = useState<
+    ReturnType<typeof prepareVisualExpression>
+  >({
+    expressions: ["x^2"],
+    parameters: [],
+    operation: null,
+  });
   const [customSource, setCustomSource] = useState("x^2");
   const [customError, setCustomError] = useState("");
-  const proofExpression = proof === "square"
-    ? "(a+b)^2=a^2+2*a*b+b^2"
-    : proof === "pythagoras" ? "3^2+4^2=5^2" : customSource;
-  function applyExpression(expression: string) {
+  const proofExpression =
+    proof === "square"
+      ? "(a+b)^2=a^2+2*a*b+b^2"
+      : proof === "pythagoras"
+        ? "3^2+4^2=5^2"
+        : customSource;
+  function applyExpression(expression: string, live = false) {
     const normalized = normalize(expression).replace(/\s/g, "");
     if (["(a+b)^2=a^2+2*a*b+b^2", "3^2+4^2=5^2"].includes(normalized)) {
       setProof(normalized.startsWith("(a+b)") ? "square" : "pythagoras");
@@ -83,20 +95,15 @@ export function ProofLab() {
       return;
     }
     try {
-      const request = mathRequest(expression);
-      const operand = request.expression.replace(/^y\s*=\s*/, "");
-      safeParse(operand, ["x"]);
-      const graphExpression = request.operation ? symbolic(operand, request.operation) : operand;
-      safeParse(graphExpression, ["x"]);
-      const evaluate = compileFunction(graphExpression);
-      if (!Array.from({ length: 101 }, (_, index) => -5 + index / 10).some((x) => Number.isFinite(evaluate(x))))
-        throw new Error("لا توجد قيم حقيقية للتعبير ضمن مجال الرسم.");
-      setCustomExpression(graphExpression);
+      const prepared = prepareVisualExpression(expression, customScope);
+      setCustom(prepared);
       setCustomSource(expression);
       setProof("custom");
       setCustomError("");
     } catch (failure) {
-      setCustomError(failure instanceof Error ? failure.message : "تعذر قراءة التعبير.");
+      setCustomError(
+        `${failure instanceof Error ? failure.message : "تعذر قراءة التعبير."}${live ? " الرسم المعروض هو آخر تعبير صالح." : ""}`,
+      );
     }
   }
   const total = a + b,
@@ -152,241 +159,316 @@ export function ProofLab() {
       <MathTools
         expression={proofExpression}
         onApply={applyExpression}
+        onLiveChange={(expression) => applyExpression(expression, true)}
+        variables={["x", "a", "b", "c"]}
         presets={[
-          { title: "مربع المجموع", expression: "(a+b)^2=a^2+2*a*b+b^2", topicId: "square" },
-          { title: "فيثاغورس — المساحات", expression: "3^2+4^2=5^2", topicId: "pythagoras" },
-          { title: "استكشاف فرق بين مربعين", expression: "x^2-4", topicId: "difference" },
+          {
+            title: "مربع المجموع",
+            expression: "(a+b)^2=a^2+2*a*b+b^2",
+            topicId: "square",
+          },
+          {
+            title: "فيثاغورس — المساحات",
+            expression: "3^2+4^2=5^2",
+            topicId: "pythagoras",
+          },
+          {
+            title: "استكشاف فرق بين مربعين",
+            expression: "x^2-4",
+            topicId: "difference",
+          },
+          { title: "تحريك معاملات القطع المكافئ", expression: "a*x^2+b*x+c" },
+          {
+            title: "تحريك موجة جيبية",
+            expression: "a*sin(b*x)+c",
+            topicId: "trigonometry",
+          },
+          { title: "استكشاف طرفي معادلة", expression: "x^2=2*x+3" },
+          ...functionFamilies.map(([title, expression]) => ({
+            title,
+            expression,
+          })),
         ]}
       />
-      {customError && <p className="error-message" role="alert">{customError}</p>}
+      {customError && (
+        <p className="error-message" role="alert">
+          {customError}
+        </p>
+      )}
       {proof === "custom" ? (
         <section className="lab-stage">
           <div className="section-heading">
-            <h2>استكشاف التعبير</h2>
-            <button className="button secondary" onClick={() => { setProof("square"); setCurrent(0); }}>
-              <RotateCcw size={16} /> العودة للإثبات
-            </button>
-          </div>
-          <Formula value={customExpression} block />
-          <Graph curves={[{ expression: customExpression, color: "#249b8d", label: "f(x)" }]} />
-          <Insight>
-            الرسم يوضح قيم التعبير، وليس إثباتًا عامًا لهوية أو معادلة.
-            {mathRequest(customSource).operation === "integral" && " عند التكامل يعرض الرسم الدالة الأصلية مع C = 0."}
-          </Insight>
-        </section>
-      ) : (
-      <div className="lab-layout">
-        <section className="lab-stage">
-          <div className="section-heading">
-            <h2>
-              {proof === "square" ? "مربع مجموع عددين" : "نظرية فيثاغورس"}
-            </h2>
-            <select
-              aria-label="الإثبات"
-              value={proof}
-              onChange={(event) => {
-                setProof(event.target.value);
+            <h2>استكشاف التعبير المتحرك</h2>
+            <button
+              className="button secondary"
+              onClick={() => {
+                setProof("square");
                 setCurrent(0);
               }}
             >
-              <option value="square">مربع المجموع</option>
-              <option value="pythagoras">فيثاغورس — المساحات</option>
-            </select>
+              <RotateCcw size={16} /> العودة للإثبات
+            </button>
           </div>
-          <div className="proof-stage">
-            {proof === "square" ? (
-              <svg
-                viewBox="0 0 540 420"
-                role="img"
-                aria-label="إثبات مساحة مربع مجموع عددين"
+          <Formula
+            value={custom.expressions
+              .map((expression) => safeParse(expression).toTex())
+              .join("=")}
+            block
+          />
+          {custom.parameters.length > 0 && (
+            <div className="visual-parameter-controls">
+              {custom.parameters.map((parameter: VisualParameter) => (
+                <Slider
+                  key={parameter}
+                  label={parameter}
+                  min={-5}
+                  max={5}
+                  step={0.1}
+                  value={customScope[parameter]}
+                  onChange={(value) =>
+                    setCustomScope((current) => ({
+                      ...current,
+                      [parameter]: value,
+                    }))
+                  }
+                />
+              ))}
+            </div>
+          )}
+          <Graph
+            scope={customScope}
+            curves={custom.expressions.map((expression, index) => ({
+              expression,
+              color: index === 0 ? "#249b8d" : "#7770ce",
+              label:
+                custom.expressions.length === 1
+                  ? "f(x)"
+                  : index === 0
+                    ? "الطرف الأيسر"
+                    : "الطرف الأيمن",
+            }))}
+          />
+          <Insight>
+            غيّر رقمًا في التعبير أو قيمة أحد المعاملات؛ يتحدث الرسم مباشرة وينتقل
+            إلى الشكل الجديد مرة واحدة ثم يثبت. للمعادلة نرسم طرفيها؛ تقاطعهما يوضح مساواتهما عند
+            تلك القيم، وليس إثباتًا عامًا لهوية أو معادلة.
+            {custom.operation === "integral" &&
+              " عند التكامل يعرض الرسم الدالة الأصلية مع C = 0."}
+          </Insight>
+        </section>
+      ) : (
+        <div className="lab-layout">
+          <section className="lab-stage">
+            <div className="section-heading">
+              <h2>
+                {proof === "square" ? "مربع مجموع عددين" : "نظرية فيثاغورس"}
+              </h2>
+              <select
+                aria-label="الإثبات"
+                value={proof}
+                onChange={(event) => {
+                  setProof(event.target.value);
+                  setCurrent(0);
+                }}
               >
-                <g transform="translate(110,65)">
-                  {current === 0 ? (
-                    <>
-                      <rect
-                        width="290"
-                        height="290"
-                        fill="#7770ce"
-                        fillOpacity="0.14"
-                        stroke="#7770ce"
-                        strokeWidth="2"
-                      />
-                      <text x="145" y="145" className="svg-big">
-                        (a+b)²
-                      </text>
-                    </>
-                  ) : (
-                    pieces.map((piece, index) => (
-                      <g
-                        key={piece.label + index}
-                        style={{
-                          transform:
-                            current === 2
-                              ? `translate(${index % 2 ? 10 : -10}px, ${index > 1 ? 10 : -10}px)`
-                              : "translate(0,0)",
-                          transition: "transform 700ms ease",
-                        }}
-                      >
+                <option value="square">مربع المجموع</option>
+                <option value="pythagoras">فيثاغورس — المساحات</option>
+              </select>
+            </div>
+            <div className="proof-stage">
+              {proof === "square" ? (
+                <svg
+                  viewBox="0 0 540 420"
+                  role="img"
+                  aria-label="إثبات مساحة مربع مجموع عددين"
+                >
+                  <g transform="translate(110,65)">
+                    {current === 0 ? (
+                      <>
                         <rect
-                          x={piece.x}
-                          y={piece.y}
-                          width={piece.sizeX}
-                          height={piece.sizeY}
-                          fill={piece.color}
-                          fillOpacity="0.18"
-                          stroke={piece.color}
+                          width="290"
+                          height="290"
+                          fill="#7770ce"
+                          fillOpacity="0.14"
+                          stroke="#7770ce"
                           strokeWidth="2"
                         />
-                        <text
-                          x={piece.x + piece.sizeX / 2}
-                          y={piece.y + piece.sizeY / 2}
-                          className="svg-big"
-                        >
-                          {current >= 2 ? piece.label : ""}
+                        <text x="145" y="145" className="svg-big">
+                          (a+b)²
                         </text>
-                        {current === 3 && (
+                      </>
+                    ) : (
+                      pieces.map((piece, index) => (
+                        <g
+                          key={piece.label + index}
+                          style={{
+                            transform:
+                              current === 2
+                                ? `translate(${index % 2 ? 10 : -10}px, ${index > 1 ? 10 : -10}px)`
+                                : "translate(0,0)",
+                            transition: "transform 700ms ease",
+                          }}
+                        >
+                          <rect
+                            x={piece.x}
+                            y={piece.y}
+                            width={piece.sizeX}
+                            height={piece.sizeY}
+                            fill={piece.color}
+                            fillOpacity="0.18"
+                            stroke={piece.color}
+                            strokeWidth="2"
+                          />
                           <text
                             x={piece.x + piece.sizeX / 2}
-                            y={piece.y + piece.sizeY / 2 + 28}
-                            className="svg-small"
+                            y={piece.y + piece.sizeY / 2}
+                            className="svg-big"
                           >
-                            {fmt(piece.value)}
+                            {current >= 2 ? piece.label : ""}
                           </text>
-                        )}
-                      </g>
-                    ))
-                  )}
-                  <text x={sideA / 2} y="-18" className="svg-medium">
-                    a = {a}
+                          {current === 3 && (
+                            <text
+                              x={piece.x + piece.sizeX / 2}
+                              y={piece.y + piece.sizeY / 2 + 28}
+                              className="svg-small"
+                            >
+                              {fmt(piece.value)}
+                            </text>
+                          )}
+                        </g>
+                      ))
+                    )}
+                    <text x={sideA / 2} y="-18" className="svg-medium">
+                      a = {a}
+                    </text>
+                    <text x={sideA + sideB / 2} y="-18" className="svg-medium">
+                      b = {b}
+                    </text>
+                    <text x="145" y="325" className="svg-medium">
+                      a + b = {total}
+                    </text>
+                  </g>
+                </svg>
+              ) : (
+                <svg
+                  viewBox="0 0 540 440"
+                  role="img"
+                  aria-label="مربعات أضلاع مثلث قائم"
+                >
+                  <polygon
+                    points="210,200 330,200 210,290"
+                    fill="#f0f2f5"
+                    stroke="#838b97"
+                    strokeWidth="2"
+                  />
+                  <rect
+                    x="210"
+                    y="80"
+                    width="120"
+                    height="120"
+                    fill="#7770ce"
+                    fillOpacity="0.2"
+                    stroke="#7770ce"
+                  />
+                  <rect
+                    x="120"
+                    y="200"
+                    width="90"
+                    height="90"
+                    fill="#249b8d"
+                    fillOpacity="0.2"
+                    stroke="#249b8d"
+                  />
+                  <polygon
+                    points="330,200 420,320 300,410 210,290"
+                    fill="#e28e4e"
+                    fillOpacity={0.1 + current * 0.05}
+                    stroke="#e28e4e"
+                  />
+                  <text x="270" y="145" className="svg-big">
+                    b² = 16
                   </text>
-                  <text x={sideA + sideB / 2} y="-18" className="svg-medium">
-                    b = {b}
+                  <text x="165" y="250" className="svg-medium">
+                    a² = 9
                   </text>
-                  <text x="145" y="325" className="svg-medium">
-                    a + b = {total}
+                  <text x="318" y="315" className="svg-big">
+                    c² = 25
                   </text>
-                </g>
-              </svg>
+                </svg>
+              )}
+            </div>
+            <div className="proof-equation">
+              <Formula
+                value={
+                  proof === "square"
+                    ? current === 3
+                      ? "(a+b)^2=a^2+2ab+b^2"
+                      : "(a+b)^2"
+                    : "3^2+4^2=5^2"
+                }
+                block
+              />
+            </div>
+            <Timeline steps={steps} current={current} onChange={setCurrent} />
+          </section>
+          <aside className="lab-properties">
+            <h3>متغيرات التجربة</h3>
+            {proof === "square" ? (
+              <>
+                <Slider
+                  label="a"
+                  min={1}
+                  max={6}
+                  value={a}
+                  color="#7770ce"
+                  onChange={setA}
+                />
+                <Slider
+                  label="b"
+                  min={1}
+                  max={6}
+                  value={b}
+                  color="#e28e4e"
+                  onChange={setB}
+                />
+                <div className="metric">
+                  <span>المساحة الكلية</span>
+                  <strong>{total ** 2}</strong>
+                </div>
+                <Insight title={steps[current]}>
+                  <p>
+                    {
+                      [
+                        "طول ضلع المربع a+b، لذلك مساحته (a+b)².",
+                        "نقسم كل ضلع عند المسافة a. ينتج مربعان ومستطيلان دون تداخل.",
+                        "مساحة كل مستطيل ab؛ ولهذا يوجد حدان لا حد واحد.",
+                        "نجمع المناطق الأربع: a² + ab + ab + b². هذا يساوي مساحة المربع الأصلي.",
+                      ][current]
+                    }
+                  </p>
+                  <p>
+                    تغيير الأضلاع يغير المساحات: a² = {a * a}، ab = {a * b}، b²
+                    = {b * b}.
+                  </p>
+                </Insight>
+                <Why>
+                  عند تغيير a أو b، يتغير طول الضلع ومجموع المساحات بنفس
+                  المقدار؛ لأن المناطق تغطي المربع كاملًا.
+                </Why>
+              </>
             ) : (
-              <svg
-                viewBox="0 0 540 440"
-                role="img"
-                aria-label="مربعات أضلاع مثلث قائم"
-              >
-                <polygon
-                  points="210,200 330,200 210,290"
-                  fill="#f0f2f5"
-                  stroke="#838b97"
-                  strokeWidth="2"
-                />
-                <rect
-                  x="210"
-                  y="80"
-                  width="120"
-                  height="120"
-                  fill="#7770ce"
-                  fillOpacity="0.2"
-                  stroke="#7770ce"
-                />
-                <rect
-                  x="120"
-                  y="200"
-                  width="90"
-                  height="90"
-                  fill="#249b8d"
-                  fillOpacity="0.2"
-                  stroke="#249b8d"
-                />
-                <polygon
-                  points="330,200 420,320 300,410 210,290"
-                  fill="#e28e4e"
-                  fillOpacity={0.1 + current * 0.05}
-                  stroke="#e28e4e"
-                />
-                <text x="270" y="145" className="svg-big">
-                  b² = 16
-                </text>
-                <text x="165" y="250" className="svg-medium">
-                  a² = 9
-                </text>
-                <text x="318" y="315" className="svg-big">
-                  c² = 25
-                </text>
-              </svg>
-            )}
-          </div>
-          <div className="proof-equation">
-            <Formula
-              value={
-                proof === "square"
-                  ? current === 3
-                    ? "(a+b)^2=a^2+2ab+b^2"
-                    : "(a+b)^2"
-                  : "3^2+4^2=5^2"
-              }
-              block
-            />
-          </div>
-          <Timeline steps={steps} current={current} onChange={setCurrent} />
-        </section>
-        <aside className="lab-properties">
-          <h3>متغيرات التجربة</h3>
-          {proof === "square" ? (
-            <>
-              <Slider
-                label="a"
-                min={1}
-                max={6}
-                value={a}
-                color="#7770ce"
-                onChange={setA}
-              />
-              <Slider
-                label="b"
-                min={1}
-                max={6}
-                value={b}
-                color="#e28e4e"
-                onChange={setB}
-              />
-              <div className="metric">
-                <span>المساحة الكلية</span>
-                <strong>{total ** 2}</strong>
-              </div>
-              <Insight title={steps[current]}>
+              <Insight>
                 <p>
-                  {
-                    [
-                      "طول ضلع المربع a+b، لذلك مساحته (a+b)².",
-                      "نقسم كل ضلع عند المسافة a. ينتج مربعان ومستطيلان دون تداخل.",
-                      "مساحة كل مستطيل ab؛ ولهذا يوجد حدان لا حد واحد.",
-                      "نجمع المناطق الأربع: a² + ab + ab + b². هذا يساوي مساحة المربع الأصلي.",
-                    ][current]
-                  }
+                  المربع على ضلع 3 مساحته 9، وعلى ضلع 4 مساحته 16. مجموعهما 25
+                  يساوي مربع الوتر 5. تنطبق النظرية لأن الزاوية قائمة.
                 </p>
                 <p>
-                  تغيير الأضلاع يغير المساحات: a² = {a * a}، ab = {a * b}، b² ={" "}
-                  {b * b}.
+                  العرض هنا مقارنة مساحات؛ ليس إثباتًا عامًا بإعادة ترتيب القطع.
                 </p>
               </Insight>
-              <Why>
-                عند تغيير a أو b، يتغير طول الضلع ومجموع المساحات بنفس المقدار؛
-                لأن المناطق تغطي المربع كاملًا.
-              </Why>
-            </>
-          ) : (
-            <Insight>
-              <p>
-                المربع على ضلع 3 مساحته 9، وعلى ضلع 4 مساحته 16. مجموعهما 25
-                يساوي مربع الوتر 5. تنطبق النظرية لأن الزاوية قائمة.
-              </p>
-              <p>
-                العرض هنا مقارنة مساحات؛ ليس إثباتًا عامًا بإعادة ترتيب القطع.
-              </p>
-            </Insight>
-          )}
-        </aside>
-      </div>
+            )}
+          </aside>
+        </div>
       )}
     </>
   );
