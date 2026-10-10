@@ -103,7 +103,7 @@ export function MathTools({
             className="button primary"
             onClick={() => onApply(preset.expression)}
           >
-            <ArrowLeft size={16} /> تطبيق القانون
+            <ArrowLeft size={16} /> فتح مثال القانون
           </button>
           <label className="field-label">
             المفاهيم والقوانين

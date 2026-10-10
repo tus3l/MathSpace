@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Bookmark,
@@ -20,11 +20,34 @@ import {
   fmt,
   symbolic,
 } from "../engine/math";
-import type { Analysis } from "../engine/math";
+import {
+  prepareWorkspaceVisual,
+  resolveVisualInput,
+  visualInputParameters,
+} from "../engine/visual";
+import type { WorkspaceVisual } from "../engine/visual";
+import type { LawAttempt } from "../engine/learning";
 import { functionFamilies } from "../content/knowledge";
 import { Graph } from "./Graph";
 import { Formula, MathInput, Slider, Why } from "./Controls";
 import { MathTools } from "./MathTools";
+import { LearningPanel } from "./LearningPanel";
+
+function initialVisual(expression: string): WorkspaceVisual {
+  try {
+    return prepareWorkspaceVisual(expression, { a: 1, b: 1, c: 0 });
+  } catch {
+    return {
+      expressions: [],
+      points: [],
+      segments: [],
+      parameters: [],
+      kind: "تمثيل غير متاح",
+      description: "تعذر قراءة التعبير للرسم.",
+      operation: null,
+    };
+  }
+}
 
 type Props = {
   onSave: (expression: string, kind: string) => void;
@@ -40,10 +63,22 @@ export function Workspace({
 }: Props) {
   const equationRef = useRef<HTMLInputElement>(null);
   const [input, setInput] = useState(initial || "x^2 + 5x + 6 = 0");
-  const [analysis, setAnalysis] = useState<Analysis>(() =>
-    analyze(initial || "x^2 + 5x + 6 = 0"),
+  const [visual, setVisual] = useState(() =>
+    initialVisual(initial || "x^2 + 5x + 6 = 0"),
   );
+  const [graphError, setGraphError] = useState("");
+  const [activity, setActivity] = useState<string[]>([]);
+  const [running, setRunning] = useState(false);
+  const [graphVersion, setGraphVersion] = useState(0);
+  const [probeX, setProbeX] = useState(0);
+  const [preview, setPreview] = useState<{
+    visual: WorkspaceVisual;
+    reason: string;
+    purpose: LawAttempt["purpose"];
+    source: string;
+  } | null>(null);
   const [mode, setMode] = useState<"solve" | "explore" | "compare">("solve");
+  const [visualScope, setVisualScope] = useState({ a: 1, b: 1, c: 0 });
   const [parameters, setParameters] = useState(() => {
     try {
       const [c, b, a] = coefficients(
@@ -51,7 +86,7 @@ export function Workspace({
       );
       return { a, b, c };
     } catch {
-      return { a: 1, b: 0, c: 0 };
+      return { a: 1, b: 1, c: 0 };
     }
   });
   const [change, setChange] = useState(
@@ -73,38 +108,126 @@ export function Workspace({
     "simplify" | "factor" | "expand" | "derivative" | "integral"
   >("simplify");
   const [symbolicResult, setSymbolicResult] = useState("");
-  const expression = analysis.graph || "0";
   const exploreExpression = `${parameters.a}*x^2+(${parameters.b})*x+(${parameters.c})`;
-  const currentExpression = mode === "solve" ? expression : exploreExpression;
-  const curves =
-    !analysis.supported && mode === "solve"
-      ? []
-      : [
-          { expression: currentExpression, color: "#7770ce", label: "f(x)" },
-          ...(mode === "compare"
-            ? [
-                {
-                  expression: "x^2",
-                  color: "#249b8d",
-                  label: "Before: x²",
-                  dashed: true,
-                },
-              ]
-            : []),
-          ...extra.map((expression, index) => ({
-            expression,
-            color: ["#e28e4e", "#d8687e", "#358ec5"][index % 3],
-            label: expression,
-          })),
-        ];
-  const currentAnalysis =
-    mode === "solve" ? analysis : analyze(`${exploreExpression}=0`);
+  const activeScope = mode === "solve" ? visualScope : parameters;
+  const controlParameters = useMemo(() => {
+    try {
+      return visualInputParameters(input);
+    } catch {
+      return visual.parameters;
+    }
+  }, [input, visual.parameters]);
+  const currentSource = useMemo(() => {
+    try {
+      return resolveVisualInput(
+        mode === "solve" ? input : `${exploreExpression}=0`,
+        activeScope,
+      );
+    } catch {
+      return input;
+    }
+  }, [input, mode, exploreExpression, activeScope]);
+  const currentAnalysis = useMemo(
+    () => analyze(currentSource),
+    [currentSource],
+  );
+  const problemValues = useMemo(() => {
+    try {
+      const [c, b, a] = coefficients(currentSource);
+      return { a, b, c };
+    } catch {
+      return Object.fromEntries(
+        visual.parameters.map((name) => [name, activeScope[name]]),
+      );
+    }
+  }, [currentSource, visual.parameters, activeScope]);
+  const currentExpression =
+    visual.expressions.length === 2
+      ? `(${visual.expressions[0]})-(${visual.expressions[1]})`
+      : visual.expressions[0] || "";
+  const activePreview = preview?.source === currentSource ? preview : null;
+  const curves = useMemo(
+    () => [
+      ...(currentExpression
+        ? [
+            {
+              expression: currentExpression,
+              color: "#7770ce",
+              label: visual.expressions.length === 2 ? "فرق الطرفين" : "f(x)",
+            },
+          ]
+        : []),
+      ...(activePreview?.visual.expressions.map((expression) => ({
+        expression,
+        color: "#249b8d",
+        label: "أثر الخطوة / القانون",
+        dashed: true,
+      })) || []),
+      ...(mode === "compare"
+        ? [
+            {
+              expression: "x^2",
+              color: "#249b8d",
+              label: "Before: x²",
+              dashed: true,
+            },
+          ]
+        : []),
+      ...extra.map((expression, index) => ({
+        expression,
+        color: ["#e28e4e", "#d8687e", "#358ec5"][index % 3],
+        label: expression,
+      })),
+    ],
+    [currentExpression, visual.expressions.length, activePreview, mode, extra],
+  );
   const points = currentAnalysis.roots.map((root) => ({
     x: root,
     y: 0,
     label: `x = ${fmt(root)}`,
     color: "#7770ce",
   }));
+  const evaluate = useMemo(() => {
+    try {
+      return compileFunction(currentExpression);
+    } catch {
+      return null;
+    }
+  }, [currentExpression]);
+  const probePoint = (() => {
+    if (evaluate && Number.isFinite(evaluate(probeX, activeScope)))
+      return { x: probeX, y: evaluate(probeX, activeScope) };
+    if (!visual.segments.length) return null;
+    const position = Math.min(
+      visual.segments.length - 1e-6,
+      Math.max(0, ((probeX + 8) / 16) * visual.segments.length),
+    );
+    const segment = visual.segments[Math.floor(position)],
+      progress = position % 1;
+    return {
+      x: segment.from.x + progress * (segment.to.x - segment.from.x),
+      y: segment.from.y + progress * (segment.to.y - segment.from.y),
+    };
+  })();
+  if (probePoint)
+    points.push({
+      ...probePoint,
+      label: `P(${fmt(probePoint.x)}, ${fmt(probePoint.y)})`,
+      color: "#e28e4e",
+    });
+  useEffect(() => {
+    if (!running) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    let request = 0;
+    let start: number | null = null;
+    const tick = (now: number) => {
+      start ??= now;
+      setProbeX(4 * Math.sin((now - start) / 2500));
+      request = requestAnimationFrame(tick);
+    };
+    request = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(request);
+  }, [running]);
   if (mode !== "solve" && parameters.a !== 0) {
     const x = -parameters.b / (2 * parameters.a);
     points.push({
@@ -114,10 +237,27 @@ export function Workspace({
       color: "#249b8d",
     });
   }
+  const graphPoints = [
+    ...visual.points,
+    ...points,
+    ...(activePreview?.visual.points || []),
+  ].filter(
+    (point, index, all) =>
+      !all
+        .slice(0, index)
+        .some(
+          (other) =>
+            other.x === point.x &&
+            other.y === point.y &&
+            other.label === point.label,
+        ),
+  );
   function submit(expression = input, save = true) {
     const next = analyze(expression);
+    if (expression !== input)
+      setActivity((entries) => [...entries, `${input} → ${expression}`]);
     setInput(expression);
-    setAnalysis(next);
+    setRunning(false);
     setHint(0);
     setRevealed(99);
     setSymbolicResult("");
@@ -132,12 +272,68 @@ export function Workspace({
         /* Functions need not be polynomials. */
       }
     }
+    refreshVisual(expression, visualScope);
     setMode("solve");
   }
+  function refreshVisual(expression: string, scope = activeScope) {
+    try {
+      setVisual(prepareWorkspaceVisual(expression, scope));
+      setGraphError("");
+    } catch (failure) {
+      setGraphError(
+        `${failure instanceof Error ? failure.message : "تعذر رسم التعبير."} الرسم المعروض هو آخر تمثيل صالح، وليس للمدخل الحالي.`,
+      );
+    }
+  }
+  function navigateMode(next: typeof mode) {
+    setMode(next);
+    refreshVisual(
+      next === "solve" ? input : `${exploreExpression}=0`,
+      next === "solve" ? visualScope : parameters,
+    );
+    setInspector(null);
+  }
+  function showPreview(
+    expression: string,
+    purpose: LawAttempt["purpose"],
+    reason: string,
+  ) {
+    try {
+      const next = prepareWorkspaceVisual(expression, activeScope);
+      if (next.expressions.length === 2)
+        next.expressions = [
+          `(${next.expressions[0]})-(${next.expressions[1]})`,
+        ];
+      next.points.push(
+        ...analyze(expression).roots.map((root) => ({
+          x: root,
+          y: 0,
+          label: `محاولة: x=${fmt(root)}`,
+          color: "#249b8d",
+        })),
+      );
+      setPreview({ visual: next, reason, purpose, source: currentSource });
+      setError("");
+    } catch {
+      setError(
+        "هذه الخطوة لا تملك تمثيلًا بيانيًا مدعومًا؛ بقي الرسم الحالي محفوظًا.",
+      );
+    }
+  }
   function update(name: "a" | "b" | "c", value: number) {
-    const previous = parameters[name],
-      next = { ...parameters, [name]: value };
-    setParameters(next);
+    const previous = activeScope[name],
+      next = { ...activeScope, [name]: value };
+    if (mode === "solve") setVisualScope(next);
+    else setParameters(next);
+    setActivity((entries) => [
+      ...entries,
+      `${name}: ${fmt(previous)} → ${fmt(value)}`,
+    ]);
+    refreshVisual(
+      mode === "solve" ? input : `${next.a}*x^2+(${next.b})*x+(${next.c})=0`,
+      next,
+    );
+    setInspector(null);
     let why = "";
     if (name === "a")
       why =
@@ -174,17 +370,37 @@ export function Workspace({
           حفظ المسألة
         </button>
       </div>
-      <MathTools
-        expression={input}
-        onApply={submit}
-        onWrite={() => equationRef.current?.focus()}
-        presets={[
-          { title: "المعادلة التربيعية", expression: "x^2+5*x+6=0", topicId: "quadratic" },
-          { title: "الدوال والتحويلات", expression: "(x-2)^2+3", topicId: "functions" },
-          { title: "فرق بين مربعين", expression: "x^2-4=0", topicId: "difference" },
-          ...functionFamilies.map(([title, expression]) => ({ title, expression })),
-        ]}
-      />
+      <details className="workspace-examples">
+        <summary>
+          <Plus size={15} /> أمثلة ومفاهيم إضافية
+        </summary>
+        <MathTools
+          expression={input}
+          onApply={submit}
+          onWrite={() => equationRef.current?.focus()}
+          presets={[
+            {
+              title: "المعادلة التربيعية",
+              expression: "x^2+5*x+6=0",
+              topicId: "quadratic",
+            },
+            {
+              title: "الدوال والتحويلات",
+              expression: "(x-2)^2+3",
+              topicId: "functions",
+            },
+            {
+              title: "فرق بين مربعين",
+              expression: "x^2-4=0",
+              topicId: "difference",
+            },
+            ...functionFamilies.map(([title, expression]) => ({
+              title,
+              expression,
+            })),
+          ]}
+        />
+      </details>
       <form
         className="equation-entry"
         onSubmit={(event) => {
@@ -216,7 +432,7 @@ export function Workspace({
               <button
                 key={String(id)}
                 className={mode === id ? "active" : ""}
-                onClick={() => setMode(id as typeof mode)}
+                onClick={() => navigateMode(id as typeof mode)}
               >
                 <Symbol size={16} />
                 {String(label)}
@@ -240,6 +456,19 @@ export function Workspace({
               "y = 2x + 3",
               "sin(x)",
               "x² + 1 = 0",
+              "a*sin(b*x)+c",
+              "x^2+y^2=9",
+              "x^2/9+y^2/4=1",
+              "x^2-y^2=1",
+              "vector(a,4)",
+              "point(2,3)",
+              "triangle(3,4,90)",
+              "triangle(3,4,60)",
+              "circle(a)",
+              "angle(60)",
+              "[[0,-1],[1,0]]",
+              "derivative(sin(x))",
+              "integral(x^2)",
             ].map((value) => (
               <option key={value}>{value}</option>
             ))}
@@ -255,7 +484,147 @@ export function Workspace({
               <span className="status-dot" /> Live graph
             </span>
           </div>
-          <Graph curves={curves} points={points} onInspect={setInspector} />
+          <LearningPanel
+            source={currentSource}
+            graphDescription={`${visual.kind}: ${visual.description}${graphError ? ` ${graphError}` : ""}${activePreview ? ` أثر التطبيق: ${activePreview.reason}` : ""}`}
+            values={{
+              ...problemValues,
+              t: probeX,
+              ...(probePoint || {}),
+              ...(inspector
+                ? {
+                    inspectedX: inspector.x,
+                    inspectedY: inspector.y,
+                    slope: inspector.slope,
+                  }
+                : {}),
+            }}
+            activity={activity}
+            running={running}
+            onPlay={() => {
+              setRunning(!running);
+              setActivity((entries) => [
+                ...entries,
+                running
+                  ? `إيقاف الحركة عند t=${fmt(probeX)}`
+                  : "تشغيل حركة نقطة على الرسم",
+              ]);
+            }}
+            onReset={() => {
+              let scope = { a: 1, b: 1, c: 0 };
+              try {
+                const [c, b, a] = coefficients(input);
+                scope = { a, b, c };
+              } catch {}
+              setParameters(scope);
+              setVisualScope({ a: 1, b: 1, c: 0 });
+              setMode("solve");
+              setRunning(false);
+              setProbeX(0);
+              setPreview(null);
+              setExtra([]);
+              setInspector(null);
+              setError("");
+              setGraphVersion((value) => value + 1);
+              refreshVisual(input, { a: 1, b: 1, c: 0 });
+              setActivity((entries) => [
+                ...entries,
+                "إعادة ضبط الرسم والقيم دون تغيير المسألة",
+              ]);
+            }}
+            onShowSteps={() => {
+              setPanel("steps");
+              setRevealed(99);
+            }}
+            onClearPreview={() => setPreview(null)}
+            onPreview={showPreview}
+          />
+          {graphError && (
+            <p className="error-message" role="alert">
+              {graphError}
+            </p>
+          )}
+          <Graph
+            key={graphVersion}
+            autoFit
+            autoFitKey={visual.kind}
+            curves={curves}
+            points={graphPoints}
+            segments={[
+              ...visual.segments,
+              ...(activePreview?.visual.segments || []),
+            ]}
+            scope={activeScope}
+            onInspect={setInspector}
+            tangent={
+              activePreview?.purpose === "derivative" && currentExpression
+                ? { x: probeX, expression: currentExpression }
+                : undefined
+            }
+            rectangles={
+              activePreview?.purpose === "integral" && currentExpression
+                ? {
+                    count: 32,
+                    from: 0,
+                    to: probeX || 2,
+                    expression: currentExpression,
+                  }
+                : undefined
+            }
+          />
+          <p className="visual-caption">{visual.description}</p>
+          {activePreview && (
+            <div className="live-explanation">
+              <Lightbulb size={18} />
+              <p>{activePreview.reason}</p>
+            </div>
+          )}
+          {mode === "solve" && controlParameters.length > 0 && (
+            <div className="visual-parameter-controls">
+              {controlParameters.map((name) => (
+                <Slider
+                  key={name}
+                  label={name}
+                  value={visualScope[name]}
+                  min={-10}
+                  max={10}
+                  step={0.1}
+                  onChange={(value) => update(name, value)}
+                />
+              ))}
+            </div>
+          )}
+          {(evaluate || visual.segments.length > 0) && (
+            <div className="graph-probe">
+              <Slider
+                label={evaluate ? "x" : "t"}
+                value={probeX}
+                min={-8}
+                max={8}
+                step={0.05}
+                onChange={(value) => {
+                  setRunning(false);
+                  setProbeX(value);
+                  setActivity((entries) => [
+                    ...entries,
+                    `${evaluate ? "x" : "t"}: ${fmt(probeX)} → ${fmt(value)}`,
+                  ]);
+                }}
+              />
+              <code dir="ltr">
+                {evaluate
+                  ? `f(${fmt(probeX)}) = ${fmt(evaluate(probeX, activeScope))}`
+                  : probePoint
+                    ? `P(${fmt(probePoint.x)}, ${fmt(probePoint.y)})`
+                    : "—"}
+              </code>
+            </div>
+          )}
+          {error && (
+            <p className="error-message" role="status">
+              {error}
+            </p>
+          )}
           {mode !== "solve" && (
             <div className="live-explanation">
               <Lightbulb size={18} />
@@ -273,8 +642,8 @@ export function Workspace({
           )}
           <div className="graph-properties">
             <div>
-              <small>نوع المسألة</small>
-              <strong>{currentAnalysis.kind}</strong>
+              <small>نوع التمثيل</small>
+              <strong>{visual.kind}</strong>
             </div>
             <div>
               <small>الجذور الحقيقية</small>
@@ -289,8 +658,8 @@ export function Workspace({
             <div>
               <small>التقاطع مع y</small>
               <strong className="mono" dir="ltr">
-                {currentAnalysis.supported && currentAnalysis.graph
-                  ? fmt(compileFunction(currentExpression)(0))
+                {evaluate && !graphError
+                  ? fmt(evaluate(0, activeScope))
                   : "غير متاح"}
               </strong>
             </div>
@@ -376,8 +745,10 @@ export function Workspace({
                 onClick={() => {
                   try {
                     setSymbolicResult(
-                      symbolic(currentExpression, operation) +
-                        (operation === "integral" ? " + C" : ""),
+                      symbolic(
+                        resolveVisualInput(currentExpression, activeScope),
+                        operation,
+                      ) + (operation === "integral" ? " + C" : ""),
                     );
                     setError("");
                   } catch {

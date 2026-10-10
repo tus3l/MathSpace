@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { compileFunction, fmt } from "../engine/math";
 import { useGraphTransition } from "./useGraphTransition";
+import type { VisualSegment } from "../engine/visual";
 
 export type Curve = {
   expression: string;
@@ -24,7 +25,10 @@ export type GraphPoint = {
 };
 export type GraphProps = {
   curves: Curve[];
+  autoFit?: boolean;
+  autoFitKey?: string;
   points?: GraphPoint[];
+  segments?: VisualSegment[];
   scope?: Record<string, number>;
   domain?: [number, number];
   tangent?: { x: number; expression: string };
@@ -33,7 +37,10 @@ export type GraphProps = {
 };
 export function Graph({
   curves,
+  autoFit = false,
+  autoFitKey,
   points = [],
+  segments = [],
   scope = {},
   domain = [-8, 8],
   tangent,
@@ -91,11 +98,12 @@ export function Graph({
   const transition = useGraphTransition(
     [...compiledCurves, ...auxiliary].map((curve) => curve.evaluate),
     scope,
-    points,
+    [...points, ...segments.flatMap((segment) => [segment.from, segment.to])],
     JSON.stringify([
       curves.map((curve) => curve.expression),
       scope,
       points,
+      segments,
       rectangles,
       tangent,
     ]),
@@ -151,6 +159,106 @@ export function Graph({
     moved: boolean;
   } | null>(null);
   const scopeKey = JSON.stringify(scope);
+  const fitKey = JSON.stringify([
+    curveSignature,
+    scopeKey,
+    segments,
+    size.width,
+    size.height,
+  ]);
+  const previousFit = useRef("");
+  const previousGeometryFit = useRef("");
+  useEffect(() => {
+    if (
+      !autoFit ||
+      previousFit.current === fitKey ||
+      size.width <= 0 ||
+      size.height <= 0
+    )
+      return;
+    const commitFit = (next: typeof viewport, geometryKey = "") => {
+      const request = requestAnimationFrame(() => {
+        previousFit.current = fitKey;
+        previousGeometryFit.current = geometryKey;
+        setViewport(next);
+      });
+      return () => cancelAnimationFrame(request);
+    };
+    if (segments.length) {
+      const endpoints = segments.flatMap((segment) => [
+        segment.from,
+        segment.to,
+      ]);
+      const geometryKey = `${autoFitKey || "geometry"}:${size.width}:${size.height}`;
+      const halfHeight = (viewport.span * size.height) / size.width / 2;
+      if (
+        previousGeometryFit.current === geometryKey &&
+        endpoints.some(
+          (point) =>
+            Math.abs(point.x - viewport.x) <= viewport.span / 2 &&
+            Math.abs(point.y - viewport.y) <= halfHeight,
+        )
+      ) {
+        previousFit.current = fitKey;
+        return;
+      }
+      const left = Math.min(...endpoints.map((point) => point.x));
+      const right = Math.max(...endpoints.map((point) => point.x));
+      const bottom = Math.min(...endpoints.map((point) => point.y));
+      const top = Math.max(...endpoints.map((point) => point.y));
+      if ([left, right, bottom, top].every(Number.isFinite))
+        return commitFit({
+          x: (left + right) / 2,
+          y: (bottom + top) / 2,
+          span: Math.max(
+            16,
+            (right - left) * 1.3,
+            ((top - bottom) * 1.3 * size.width) / size.height,
+          ),
+        }, geometryKey);
+      previousFit.current = fitKey;
+      return;
+    }
+    previousGeometryFit.current = "";
+    const values = compiledCurves
+      .flatMap((curve) =>
+        Array.from(
+          { length: 65 },
+          (_, index) =>
+            curve.evaluate?.(
+              viewport.x - viewport.span / 2 + (index * viewport.span) / 64,
+              scope,
+            ) ?? NaN,
+        ),
+      )
+      .filter(Number.isFinite)
+      .sort((first, second) => first - second);
+    const visibleHalfHeight = (viewport.span * size.height) / size.width / 2;
+    const anchor = points.find(
+      (point) =>
+        Number.isFinite(point.y) &&
+        Math.abs(point.x - viewport.x) <= viewport.span / 2,
+    );
+    if (
+      values.length &&
+      !values.some((value) => Math.abs(value - viewport.y) <= visibleHalfHeight)
+    )
+      return commitFit({
+        ...viewport,
+        y: anchor?.y ?? values[Math.floor(values.length / 2)],
+      });
+    previousFit.current = fitKey;
+  }, [
+    autoFit,
+    autoFitKey,
+    fitKey,
+    size,
+    segments,
+    compiledCurves,
+    viewport,
+    scope,
+    points,
+  ]);
   useEffect(() => {
     if (!wrapRef.current) return;
     const observer = new ResizeObserver((entries) => {
@@ -325,8 +433,37 @@ export function Graph({
         /* Tangent omitted when undefined. */
       }
     }
+    segments.forEach((segment, index) => {
+      const from = transition.points[points.length + index * 2] ?? segment.from;
+      const to = transition.points[points.length + index * 2 + 1] ?? segment.to;
+      if (![from.x, from.y, to.x, to.y].every(Number.isFinite)) return;
+      context.strokeStyle = segment.color || "#249b8d";
+      context.lineWidth = segment.arrow ? 2.5 : 1.8;
+      context.beginPath();
+      context.moveTo(projectX(from.x), projectY(from.y));
+      context.lineTo(projectX(to.x), projectY(to.y));
+      context.stroke();
+      if (segment.arrow) {
+        const direction = Math.atan2(
+          projectY(to.y) - projectY(from.y),
+          projectX(to.x) - projectX(from.x),
+        );
+        context.beginPath();
+        context.moveTo(projectX(to.x), projectY(to.y));
+        context.lineTo(
+          projectX(to.x) - 12 * Math.cos(direction - 0.4),
+          projectY(to.y) - 12 * Math.sin(direction - 0.4),
+        );
+        context.moveTo(projectX(to.x), projectY(to.y));
+        context.lineTo(
+          projectX(to.x) - 12 * Math.cos(direction + 0.4),
+          projectY(to.y) - 12 * Math.sin(direction + 0.4),
+        );
+        context.stroke();
+      }
+    });
     const allPoints = [
-      ...transition.points,
+      ...transition.points.slice(0, points.length),
       ...(activeInspected
         ? [
             {
@@ -394,6 +531,7 @@ export function Graph({
   }, [
     curves,
     points,
+    segments,
     scopeKey,
     size,
     viewport,

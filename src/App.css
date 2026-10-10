@@ -3,6 +3,97 @@
   display: grid;
   grid-template-columns: 225px minmax(0, 1fr);
 }
+.workspace-examples {
+  margin-block: 12px;
+}
+.workspace-examples > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  color: var(--subtle);
+  font-size: 12px;
+}
+.learning-workbench {
+  border-block: 1px solid var(--line);
+  margin-block: 12px;
+  min-width: 0;
+}
+.learning-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding-block: 8px;
+}
+.learning-toolbar button {
+  padding: 9px 10px;
+  min-height: 38px;
+  font-size: 12px;
+  gap: 6px;
+  border-radius: 4px;
+}
+.learning-toolbar button.active,
+.learning-toolbar button[aria-pressed="true"] {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.learning-drawer {
+  padding: 16px;
+  border-block-start: 1px solid var(--line);
+  background: var(--surface-alt);
+  min-width: 0;
+}
+.learning-drawer h3 { font-size: 15px; }
+.learning-drawer p,
+.visual-caption {
+  font-size: 12px;
+  line-height: 1.9;
+  color: var(--subtle);
+  overflow-wrap: anywhere;
+}
+.learning-drawer .field-label { margin-block: 12px; }
+.learning-drawer code,
+.learning-context code,
+.graph-probe code {
+  display: block;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+  font-size: 12px;
+}
+.learning-context {
+  display: grid;
+  gap: 6px;
+  padding-block: 10px;
+  border-block-end: 1px solid var(--line);
+}
+.learning-context small { color: var(--muted); }
+.learning-step,
+.learning-verdict {
+  padding: 12px;
+  margin-block: 12px;
+  border-inline-start: 3px solid #249b8d;
+  background: var(--surface);
+  font-size: 12px;
+}
+.learning-step { border-inline-start-color: var(--line); }
+.learning-step code { margin-block: 8px; }
+.learning-step.incorrect,
+.learning-verdict.incorrect { border-inline-start-color: #d8687e; }
+.learning-history summary { padding-block: 8px; cursor: pointer; font-size: 12px; }
+.graph-probe {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding-block: 12px;
+}
+@media (max-width: 600px) {
+  .learning-toolbar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .learning-toolbar button { font-size: 11px; padding-inline: 6px; }
+  .learning-drawer { padding: 12px; }
+  .graph-probe { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+}
 .sidebar {
   background: var(--surface);
   border-inline-end: 1px solid var(--line);

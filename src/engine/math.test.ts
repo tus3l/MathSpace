@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { solveQuadratic } from "./calculation";
 import { fmt } from "./math";
 import { explainStep } from "./explanation";
+import { tryLaw, verifyFinal, verifyTransition } from "./learning";
 import {
   analyze,
   checkStep,
@@ -12,6 +13,60 @@ import {
 } from "./math";
 
 describe("rule-based mathematical engine", () => {
+  it("tries a law without replacing the problem and explains missing conditions", () => {
+    const source = "2x+5=15";
+    const attempt = tryLaw(source, "quadratic");
+    expect(attempt.source).toBe(source);
+    expect(attempt.valid).toBe(false);
+    expect(attempt.output).toBe("");
+    expect(attempt.message).toContain("a ≠ 0");
+    expect(tryLaw(source, "pythagoras").valid).toBeNull();
+    expect(tryLaw(source, "balance").output).toBe("x=5");
+  });
+  it("lets the student compare geometric laws and verifies actual conditions", () => {
+    expect(tryLaw("triangle(3,4,90)", "pythagoras").output).toBe("5");
+    expect(tryLaw("triangle(3,4,60)", "pythagoras").valid).toBe(false);
+    const cosine = tryLaw("triangle(3,4,60)", "cosine");
+    expect(cosine.valid).toBe(true);
+    expect(Number(cosine.output)).toBeCloseTo(Math.sqrt(13));
+    expect(tryLaw("triangle(3,4,90)", "triangle").output).toBe("6");
+    expect(tryLaw("vector(3,4)", "pythagoras").output).toBe("5");
+    expect(tryLaw("circle(3)", "circle").valid).toBe(true);
+    const determinant = tryLaw("[[0,-1],[1,0]]", "matrix");
+    expect(determinant.output).toBe("1");
+    expect(verifyFinal(determinant.source, "1", determinant).valid).toBe(true);
+  });
+  it("applies the selected method and distinguishes transformations from solving", () => {
+    const result = tryLaw("x^2+5x+6=0", "quadratic");
+    expect(result.valid).toBe(true);
+    expect(result.steps.at(-1)?.operation).toBe("التعويض في القانون العام");
+    expect(tryLaw("x^2+1=0", "difference").valid).toBe(false);
+    expect(tryLaw("(x+2)^2", "square").valid).toBe(true);
+    expect(tryLaw("x^2+2", "square").valid).toBe(false);
+    expect(tryLaw("x^2", "derivative").preview).toBe("2 * x");
+    expect(tryLaw("x^2=0", "derivative").valid).toBe(false);
+    expect(verifyFinal("x^2+5x+6=0", "-2").valid).toBe(false);
+    expect(verifyFinal("x^2+5x+6=0", "-2,-3").valid).toBe(true);
+    expect(verifyFinal("2x+5=15", "2x+5=15").valid).toBeNull();
+    expect(verifyFinal("x^2+5x+6=0", "-2,-3", tryLaw("x^2+5x+6=0", "factor")).valid).toBe(true);
+    expect(verifyFinal("x^2+1=0", "i,-i").valid).toBe(true);
+    expect(verifyFinal("x^2=1e-24", "0").valid).toBe(false);
+    expect(verifyFinal("x^2=1e-24", "1e-12,-1e-12").valid).toBe(true);
+    expect(verifyFinal("2*x", "x^2+C", tryLaw("2*x", "integral")).valid).toBe(true);
+    expect(verifyFinal("2*x", "x^2", tryLaw("2*x", "integral")).valid).toBe(false);
+  });
+  it("checks individual steps including complex roots and identity edge cases", () => {
+    expect(verifyTransition("2x+5=15", "2x=20").valid).toBe(false);
+    expect(verifyTransition("2x+5=15", "2x=10").valid).toBe(true);
+    expect(verifyTransition("x^2+1=0", "2x^2+2=0").valid).toBe(true);
+    expect(verifyTransition("x=x", "x=x+1").valid).toBe(false);
+    expect(verifyTransition("x^2=0", "x=0").valid).toBe(true);
+    expect(verifyTransition("x^2", "x^2+1").valid).toBe(false);
+    expect(verifyTransition("x^2+1e-24=0", "x^2=0").valid).toBe(false);
+    expect(verifyFinal("2*x", "x^2+C-C", tryLaw("2*x", "integral")).valid).toBe(false);
+    expect(verifyFinal("2*x", "x^2+C*x", tryLaw("2*x", "integral")).valid).toBe(false);
+    expect(verifyFinal("2*x", "x^2+log(C)", tryLaw("2*x", "integral")).valid).toBeNull();
+  });
   it("factors a quadratic and explains every operation", () => {
     const result = analyze("x² + 5x + 6 = 0");
     expect(result.roots.sort()).toEqual([-2, -3].sort());
