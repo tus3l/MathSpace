@@ -961,6 +961,18 @@ export function GeometryLab() {
     [height, setHeight] = useState(4);
   const [vertex, setVertex] = useState({ x: 3, y: 4 });
   const [dragging, setDragging] = useState(false);
+  const [application, setApplication] = useState<{
+    source: string;
+    reason: string;
+  } | null>(null);
+  const source =
+    shape === "circle"
+      ? `circle(${radius})`
+      : shape === "triangle"
+        ? `triangle(${width},${Math.hypot(vertex.x, vertex.y)},${(Math.atan2(vertex.y, vertex.x) * 180) / Math.PI})`
+        : shape === "segment"
+          ? `vector(${width},${height})`
+          : `rectangle(${width},${height})`;
   const area =
     shape === "circle"
       ? Math.PI * radius ** 2
@@ -1007,6 +1019,38 @@ export function GeometryLab() {
               ))}
             </div>
           </div>
+          <LearningPanel
+            source={source}
+            graphDescription={
+              shape === "circle"
+                ? "دائرة معلومة نصف القطر."
+                : shape === "triangle"
+                  ? "مثلث معلوم الإحداثيات والقاعدة؛ الزاوية المحصورة محسوبة من موضع الرأس."
+                  : shape === "segment"
+                    ? "متجه من نقطة البداية إلى النهاية؛ مقداره طول القطعة."
+                    : "مستطيل معلوم الطول والعرض؛ لا يتوفر تطبيق آلي عام لقوانينه في المكتبة الحالية."
+            }
+            values={
+              shape === "circle"
+                ? { r: radius }
+                : shape === "triangle"
+                  ? { base: width, x: vertex.x, h: vertex.y }
+                  : { w: width, h: height }
+            }
+            activity={[]}
+            running={false}
+            showAnimation={false}
+            onPlay={() => {}}
+            onReset={() => setApplication(null)}
+            onShowSteps={() => {}}
+            onClearPreview={() => setApplication(null)}
+            onPreview={(_expression, _purpose, reason) =>
+              setApplication({ source, reason })
+            }
+          />
+          {application?.source === source && (
+            <p className="visual-caption">{application.reason}</p>
+          )}
           <div hidden={shape === "free"}>
             <div className="geometry-stage">
               <svg
@@ -1749,98 +1793,47 @@ export function CalculusLab() {
 export function AdvisorLab() {
   const [before, setBefore] = useState("2x + 5 = 15"),
     [after, setAfter] = useState("2x = 20"),
-    [checked, setChecked] = useState<ReturnType<typeof checkStep> | null>(null);
-  const [current, setCurrent] = useState(0);
+    [checked, setChecked] = useState<Verdict | null>(null);
+  const [application, setApplication] = useState<{
+    source: string;
+    reason: string;
+  } | null>(null);
   return (
     <>
       <LabHeader
         english="RULE-BASED MATH ADVISOR"
         title="المستشار الرياضي"
-        badge="قواعد · لا يوجد AI"
+        badge="قواعد"
       />
       <div className="lab-layout">
         <section className="lab-stage">
           <div className="section-heading">
-            <h2>ميزان المعادلة</h2>
+            <h2>المكتبة ومراجعة المسألة</h2>
           </div>
-          <div className="balance-stage">
-            <svg
-              viewBox="0 0 650 320"
-              role="img"
-              aria-label="ميزان يوضح تنفيذ العملية على الطرفين"
-            >
-              <line
-                x1="325"
-                y1="80"
-                x2="325"
-                y2="260"
-                stroke="var(--line-strong)"
-                strokeWidth="5"
-              />
-              <path
-                d="M 270 280 L 325 240 L 380 280 Z"
-                fill="var(--line-strong)"
-              />
-              <line
-                x1="150"
-                y1="90"
-                x2="500"
-                y2="90"
-                stroke="#7770ce"
-                strokeWidth="5"
-              />
-              <path
-                d="M150 90 L90 190 L210 190 Z M500 90 L440 190 L560 190 Z"
-                fill="none"
-                stroke="var(--line-strong)"
-                strokeWidth="2"
-              />
-              <rect
-                x="90"
-                y="190"
-                width="120"
-                height="45"
-                rx="4"
-                fill="#7770ce"
-                fillOpacity="0.15"
-              />
-              <rect
-                x="440"
-                y="190"
-                width="120"
-                height="45"
-                rx="4"
-                fill="#249b8d"
-                fillOpacity="0.15"
-              />
-              <text x="150" y="219" className="svg-big">
-                {current === 0 ? "x + 3" : current === 1 ? "x + 3 − 3" : "x"}
-              </text>
-              <text x="500" y="219" className="svg-big">
-                {current === 0 ? "7" : current === 1 ? "7 − 3" : "4"}
-              </text>
-            </svg>
-          </div>
-          <Formula
-            value={
-              current === 0 ? "x+3=7" : current === 1 ? "x+3-3=7-3" : "x=4"
+          <LearningPanel
+            source={before}
+            graphDescription=""
+            values={{}}
+            activity={[]}
+            running={false}
+            showAnimation={false}
+            customReview={
+              checked ? { candidate: after, verdict: checked } : null
             }
-            block
+            onPlay={() => {}}
+            onReset={() => {
+              setApplication(null);
+              setChecked(null);
+            }}
+            onShowSteps={() => {}}
+            onClearPreview={() => setApplication(null)}
+            onPreview={(_expression, _purpose, reason) =>
+              setApplication({ source: before, reason })
+            }
           />
-          <Timeline
-            steps={["المعادلة", "طرح 3 من الطرفين", "عزل المتغير"]}
-            current={current}
-            onChange={setCurrent}
-          />
-          <Insight>
-            <p>
-              {current === 0
-                ? "طرفا المعادلة لهما القيمة نفسها؛ الميزان يمثل هذه المساواة."
-                : current === 1
-                  ? "طرحنا 3 من الجانبين، لا من جانب واحد؛ لذلك لا يميل الميزان وتبقى المساواة صحيحة."
-                  : "تلاشى +3 مع -3، وأصبح x = 4. التعويض يعطي 4+3=7، فيتحقق الحل."}
-            </p>
-          </Insight>
+          {application?.source === before && (
+            <p className="visual-caption">{application.reason}</p>
+          )}
         </section>
         <aside className="lab-properties">
           <h3>افحص خطوتك</h3>
@@ -1870,7 +1863,7 @@ export function AdvisorLab() {
           </label>
           <button
             className="button primary full-width"
-            onClick={() => setChecked(checkStep(before, after))}
+            onClick={() => setChecked(verifyTransition(before, after))}
           >
             <Check size={16} /> تحقق من التكافؤ
           </button>
@@ -1893,8 +1886,9 @@ export function AdvisorLab() {
             </div>
           )}
           <Why>
-            التحقق يقارن مجموعتي الحلول للمعادلتين الخطيتين أو التربيعيتين. لا
-            يتحقق من وصف العملية التي قصدها الطالب، ولا يدعي دعم كل تحويل جبري.
+            التحقق يراجع تكافؤ المعادلات ضمن النطاق المدعوم، بما فيه معادلات
+            جبرية في x وy. لا يتحقق من وصف العملية التي قصدها الطالب، ولا يدعي
+            دعم كل تحويل جبري.
           </Why>
         </aside>
       </div>

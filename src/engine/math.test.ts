@@ -81,6 +81,15 @@ describe("rule-based mathematical engine", () => {
     );
   });
   it("checks individual steps including complex roots and identity edge cases", () => {
+    expect(verifyTransition("circle(3)", "x^2+y^2=(3)^2").valid).toBe(true);
+    expect(verifyTransition("circle(3)", "x^2+y^2=4").valid).toBe(false);
+    expect(verifyTransition("circle(-3)", "x^2+y^2=9").valid).toBeNull();
+    expect(verifyTransition("x^2+y^2=9", "x^2+y^2=(3)^2").valid).toBe(true);
+    expect(verifyTransition("x^2+y^2=9", "2*x^2+2*y^2=18").valid).toBe(true);
+    expect(verifyTransition("x^2+y^2=9", "x^2+y^2=4").valid).toBe(false);
+    expect(verifyTransition("x*y=0", "x=0").valid).toBe(false);
+    expect(verifyTransition("x^2+y^2=0", "x^2+2*y^2=0").valid).toBeNull();
+    expect(verifyTransition("x/y=1", "x=y").valid).toBeNull();
     expect(verifyTransition("2x+5=15", "2x=20").valid).toBe(false);
     expect(verifyTransition("2x+5=15", "2x=10").valid).toBe(true);
     expect(verifyTransition("x^2+1=0", "2x^2+2=0").valid).toBe(true);

@@ -62,14 +62,144 @@ export function lawStepVisual(attempt: LawAttempt, index: number) {
   }
 }
 
+function polynomialResidual(equation: string) {
+  const sides = normalize(equation).split("=");
+  if (sides.length !== 2) throw new Error("Expected two equation sides");
+  for (const side of sides) {
+    safeParse(side, ["x", "y"]).traverse((node) => {
+      if (node.type === "FunctionNode") throw new Error("Not a polynomial");
+      if (node.type !== "OperatorNode" || !("op" in node) || !("args" in node))
+        return;
+      const operator = node as import("mathjs").OperatorNode;
+      if (operator.op === "/" || operator.op === "^") {
+        const operand = operator.args[1];
+        let variable = false;
+        operand.traverse((child) => {
+          if (child.type === "SymbolNode") variable = true;
+        });
+        if (variable) throw new Error("Variable denominator or exponent");
+        const value = operand.compile().evaluate();
+        if (
+          typeof value !== "number" ||
+          !Number.isFinite(value) ||
+          (operator.op === "/"
+            ? value === 0
+            : !Number.isInteger(value) || value < 0 || value > 12)
+        )
+          throw new Error("Unsupported polynomial operand");
+      } else if (!["+", "-", "*"].includes(operator.op))
+        throw new Error("Unsupported polynomial operator");
+    });
+  }
+  return symbolic(`(${sides[0]})-(${sides[1]})`, "expand");
+}
+
+function verifyPlaneEquation(before: string, after: string): Verdict {
+  const first = polynomialResidual(before),
+    second = polynomialResidual(after);
+  const difference = symbolic(`(${first})-(${second})`, "expand");
+  if (difference === "0")
+    return {
+      valid: true,
+      message:
+        "المعادلتان متكافئتان: بعد التوسيع، فرق الطرفين هو نفسه في كلتيهما. تغيير 3² إلى 9 أو نقل الحدود لا يغير نقاط الحل.",
+    };
+  if (first !== "0" && second !== "0") {
+    const ratio = symbolic(`(${first})/(${second})`, "factor");
+    let value: unknown;
+    try {
+      value = safeParse(ratio, []).compile().evaluate();
+    } catch {
+      value = null;
+    }
+    if (
+      typeof value === "number" &&
+      Number.isFinite(value) &&
+      value !== 0 &&
+      symbolic(`(${first})-(${ratio})*(${second})`, "expand") === "0"
+    )
+      return {
+        valid: true,
+        message: `المعادلتان متكافئتان: فرق الطرفين يختلف بعامل ثابت غير صفري (${ratio})، فلا تتغير نقاط الحل.`,
+      };
+  }
+  const coordinates = [0, 1, -1, 3, -3];
+  for (const x of coordinates)
+    for (const y of coordinates) {
+      const atPoint = (expression: string) =>
+        symbolic(
+          parse(expression)
+            .transform((node) =>
+              node.type === "SymbolNode" &&
+              "name" in node &&
+              (node.name === "x" || node.name === "y")
+                ? parse(`(${node.name === "x" ? x : y})`)
+                : node,
+            )
+            .toString(),
+          "expand",
+        );
+      const left = atPoint(first),
+        right = atPoint(second);
+      const nonzero = (value: string) =>
+        value !== "0" && Number.isFinite(Number(value)) && Number(value) !== 0;
+      if ((left === "0" && nonzero(right)) || (right === "0" && nonzero(left)))
+        return {
+          valid: false,
+          message: `المعادلتان غير متكافئتين: النقطة (${x}, ${y}) تحقق ${left === "0" ? "المعادلة الأصلية" : "المعادلة الجديدة"} ولا تحقق الأخرى. فرق الطرفين عندها: الأصل ${left}، والجديد ${right}. هذه نقطة مضادة، لا مجرد اختلاف في شكل الرسم.`,
+        };
+    }
+  return {
+    valid: null,
+    message:
+      "لم يثبت التكافؤ ولم تُوجد نقطة مضادة في الفحص المحدود. اختلاف المعاملات وحده لا يثبت اختلاف مجموعة الحلول؛ لا نعتمد الرسم كبرهان.",
+  };
+}
+
 export function verifyTransition(before: string, after: string): Verdict {
   try {
+    const circleEquation = (input: string) => {
+      const normalized = normalize(input);
+      if (normalized.includes("=")) return normalized;
+      const node = parse(normalized);
+      if (node.type !== "FunctionNode") return normalized;
+      const call = node as FunctionNode;
+      if (call.fn.toString() !== "circle" || call.args.length !== 1)
+        return normalized;
+      const radius: unknown = safeParse(call.args[0].toString(), [])
+        .compile()
+        .evaluate();
+      if (typeof radius !== "number" || !Number.isFinite(radius) || radius <= 0)
+        throw new Error("Invalid circle radius");
+      return `x^2+y^2=(${radius})^2`;
+    };
+    before = circleEquation(before);
+    after = circleEquation(after);
     if (normalize(before).includes("=") !== normalize(after).includes("="))
       return {
         valid: null,
         message: "لا تقارن معادلة بتعبير منفرد؛ اكتب طرفي الخطوة.",
       };
     if (before.includes("=")) {
+      if (
+        [before, after].some((equation) =>
+          normalize(equation)
+            .split("=")
+            .some((side) => {
+              let hasY = false;
+              safeParse(side, ["x", "y"]).traverse((node) => {
+                if (
+                  node.type === "SymbolNode" &&
+                  "name" in node &&
+                  node.name === "y"
+                )
+                  hasY = true;
+              });
+              return hasY;
+            }),
+        )
+      )
+        return verifyPlaneEquation(before, after);
       const first = coefficients(before),
         second = coefficients(after);
       const firstScale = Math.max(...first.map(Math.abs));
