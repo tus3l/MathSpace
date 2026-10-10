@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   BookOpen,
   Check,
@@ -12,6 +12,7 @@ import {
 import { analyze } from "../engine/math";
 import {
   learningLaws,
+  lawStepVisual,
   tryLaw,
   verifyFinal,
   verifyTransition,
@@ -68,6 +69,10 @@ export function LearningPanel({
     (attempt) => attempt.source === source,
   );
   const attempt = currentAttempts.at(-1);
+  const stepVisuals = useMemo(
+    () => attempt?.steps.map((_, index) => lawStepVisual(attempt, index)) || [],
+    [attempt],
+  );
   const attemptIndex = attempt ? attempts.lastIndexOf(attempt) : -1;
   const currentSteps = steps.filter(
     (step) =>
@@ -234,9 +239,15 @@ export function LearningPanel({
                   <p>{step.reason}</p>
                   <button
                     className="button secondary"
+                    disabled={!stepVisuals[index]}
+                    title={
+                      stepVisuals[index]
+                        ? "عرض هذه الخطوة على الرسم"
+                        : "هذه الخطوة حسابية ولا تملك تمثيلًا بيانيًا مدعومًا"
+                    }
                     onClick={() =>
                       onPreview(
-                        attempt.preview || step.after,
+                        stepVisuals[index]!,
                         attempt.purpose,
                         `${step.after}. ${step.reason}`,
                       )
@@ -356,6 +367,31 @@ export function LearningPanel({
                     ? `${attempt.title}: ${attempt.message}`
                     : "لم تختَر قانونًا من المكتبة؛ المراجعة تعتمد على خطواتك والنتيجة المدخلة."}
                 </p>
+                {attempt?.valid && (
+                  <p>
+                    <strong>نتيجة تطبيق القانون: </strong>
+                    <code dir="ltr">{attempt.output}</code>
+                    {attempt.purpose === "transform"
+                      ? "هذا تحويل مكافئ، وليس بالضرورة حلًا نهائيًا."
+                      : attempt.purpose === "solve"
+                        ? "هذه نتيجة المحرك المرجعية؛ نراجع نتيجة الطالب على حدة أدناه."
+                        : "هذه نتيجة العملية المختارة، وليست ادعاءً بحل كل ما في المسألة."}
+                  </p>
+                )}
+                {attempt?.valid && (
+                  <details>
+                    <summary>كيف طُبق القانون ولماذا النتيجة صحيحة؟</summary>
+                    {attempt.steps.map((step, index) => (
+                      <div className="learning-step" key={index}>
+                        <strong>
+                          {index + 1}. {step.operation}
+                        </strong>
+                        <code dir="ltr">{step.after}</code>
+                        <p>{step.reason}</p>
+                      </div>
+                    ))}
+                  </details>
+                )}
                 {firstError !== -1 && (
                   <>
                     <p>{currentSteps[firstError].message}</p>

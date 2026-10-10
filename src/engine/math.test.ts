@@ -2,7 +2,12 @@ import { describe, expect, it } from "vitest";
 import { solveQuadratic } from "./calculation";
 import { fmt } from "./math";
 import { explainStep } from "./explanation";
-import { tryLaw, verifyFinal, verifyTransition } from "./learning";
+import {
+  lawStepVisual,
+  tryLaw,
+  verifyFinal,
+  verifyTransition,
+} from "./learning";
 import {
   analyze,
   checkStep,
@@ -35,6 +40,20 @@ describe("rule-based mathematical engine", () => {
     const determinant = tryLaw("[[0,-1],[1,0]]", "matrix");
     expect(determinant.output).toBe("1");
     expect(verifyFinal(determinant.source, "1", determinant).valid).toBe(true);
+    expect(cosine.steps).toHaveLength(3);
+    expect(cosine.steps[1].after).toContain("-(12)");
+    expect(lawStepVisual(cosine, 0)).toBe(cosine.source);
+    expect(lawStepVisual(cosine, 1)).toBeNull();
+    expect(lawStepVisual(cosine, 2)).toContain("vector(");
+    const linear = tryLaw("2x+5=15", "balance");
+    expect(lawStepVisual(linear, 1)).toBe(linear.steps[1].after);
+    expect(lawStepVisual(linear, 1)).not.toBe(linear.preview);
+    expect(verifyFinal(cosine.source, "sqrt(13)", cosine).valid).toBe(true);
+    const smallVector = tryLaw("vector(1e-12,0)", "vectors");
+    expect(verifyFinal(smallVector.source, "0", smallVector).valid).toBe(false);
+    expect(verifyFinal(smallVector.source, "1e-12", smallVector).valid).toBe(
+      true,
+    );
   });
   it("applies the selected method and distinguishes transformations from solving", () => {
     const result = tryLaw("x^2+5x+6=0", "quadratic");
@@ -48,12 +67,18 @@ describe("rule-based mathematical engine", () => {
     expect(verifyFinal("x^2+5x+6=0", "-2").valid).toBe(false);
     expect(verifyFinal("x^2+5x+6=0", "-2,-3").valid).toBe(true);
     expect(verifyFinal("2x+5=15", "2x+5=15").valid).toBeNull();
-    expect(verifyFinal("x^2+5x+6=0", "-2,-3", tryLaw("x^2+5x+6=0", "factor")).valid).toBe(true);
+    expect(
+      verifyFinal("x^2+5x+6=0", "-2,-3", tryLaw("x^2+5x+6=0", "factor")).valid,
+    ).toBe(true);
     expect(verifyFinal("x^2+1=0", "i,-i").valid).toBe(true);
     expect(verifyFinal("x^2=1e-24", "0").valid).toBe(false);
     expect(verifyFinal("x^2=1e-24", "1e-12,-1e-12").valid).toBe(true);
-    expect(verifyFinal("2*x", "x^2+C", tryLaw("2*x", "integral")).valid).toBe(true);
-    expect(verifyFinal("2*x", "x^2", tryLaw("2*x", "integral")).valid).toBe(false);
+    expect(verifyFinal("2*x", "x^2+C", tryLaw("2*x", "integral")).valid).toBe(
+      true,
+    );
+    expect(verifyFinal("2*x", "x^2", tryLaw("2*x", "integral")).valid).toBe(
+      false,
+    );
   });
   it("checks individual steps including complex roots and identity edge cases", () => {
     expect(verifyTransition("2x+5=15", "2x=20").valid).toBe(false);
@@ -63,9 +88,15 @@ describe("rule-based mathematical engine", () => {
     expect(verifyTransition("x^2=0", "x=0").valid).toBe(true);
     expect(verifyTransition("x^2", "x^2+1").valid).toBe(false);
     expect(verifyTransition("x^2+1e-24=0", "x^2=0").valid).toBe(false);
-    expect(verifyFinal("2*x", "x^2+C-C", tryLaw("2*x", "integral")).valid).toBe(false);
-    expect(verifyFinal("2*x", "x^2+C*x", tryLaw("2*x", "integral")).valid).toBe(false);
-    expect(verifyFinal("2*x", "x^2+log(C)", tryLaw("2*x", "integral")).valid).toBeNull();
+    expect(verifyFinal("2*x", "x^2+C-C", tryLaw("2*x", "integral")).valid).toBe(
+      false,
+    );
+    expect(verifyFinal("2*x", "x^2+C*x", tryLaw("2*x", "integral")).valid).toBe(
+      false,
+    );
+    expect(
+      verifyFinal("2*x", "x^2+log(C)", tryLaw("2*x", "integral")).valid,
+    ).toBeNull();
   });
   it("factors a quadratic and explains every operation", () => {
     const result = analyze("x² + 5x + 6 = 0");
@@ -135,14 +166,25 @@ describe("rule-based mathematical engine", () => {
     expect(analyze("٢x+٥=١٥").roots).toEqual([5]);
   });
   it("computes typed integral and derivative requests instead of rejecting them", () => {
-    for (const input of ["∫ sin(x) dx", "integral(sin(x))", "integrate(sin(x),x)", "∫ جا(x) dx"]) {
+    for (const input of [
+      "∫ sin(x) dx",
+      "integral(sin(x))",
+      "integrate(sin(x),x)",
+      "∫ جا(x) dx",
+    ]) {
       const result = analyze(input);
       expect(result.supported).toBe(true);
       expect(result.kind).toBe("تكامل غير محدد");
       expect(result.result).toContain("+ C");
-      const differentiated = compileFunction(symbolic(result.graph, "derivative"));
+      const differentiated = compileFunction(
+        symbolic(result.graph, "derivative"),
+      );
       expect(differentiated(0.7)).toBeCloseTo(Math.sin(0.7));
-      expect(result.steps.every((item) => item.before && item.after && item.reason && item.rule)).toBe(true);
+      expect(
+        result.steps.every(
+          (item) => item.before && item.after && item.reason && item.rule,
+        ),
+      ).toBe(true);
     }
     expect(compileFunction(analyze("derivative(sin(x))").graph)(0)).toBe(1);
     expect(compileFunction(analyze("d/dx (x^3)").graph)(2)).toBe(12);

@@ -6,6 +6,14 @@
 .workspace-examples {
   margin-block: 12px;
 }
+.math-notation-notice {
+  color: var(--subtle);
+  font-size: 12px;
+  line-height: 1.8;
+  margin-block: 8px;
+  padding-inline-start: 10px;
+  border-inline-start: 3px solid #e28e4e;
+}
 .workspace-examples > summary {
   display: flex;
   align-items: center;
@@ -42,6 +50,8 @@
   border-block-start: 1px solid var(--line);
   background: var(--surface-alt);
   min-width: 0;
+  max-height: min(400px, 40dvh);
+  overflow-y: auto;
 }
 .learning-drawer h3 { font-size: 15px; }
 .learning-drawer p,
@@ -91,7 +101,7 @@
 @media (max-width: 600px) {
   .learning-toolbar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .learning-toolbar button { font-size: 11px; padding-inline: 6px; }
-  .learning-drawer { padding: 12px; }
+  .learning-drawer { padding: 12px; max-height: 30dvh; }
   .graph-probe { grid-template-columns: minmax(0, 1fr); gap: 4px; }
 }
 .sidebar {
@@ -1200,6 +1210,18 @@
   overflow-wrap: anywhere;
   direction: ltr;
 }
+.geometry-heading { flex-wrap: wrap; gap: 12px; }
+.geometry-heading .segmented { flex-wrap: wrap; max-width: 100%; }
+.free-geometry-layout { grid-template-columns: minmax(0, 1fr); }
+.free-geometry { display: grid; gap: 12px; min-width: 0; }
+.free-geometry input[type="range"] { margin-inline: 0; }
+.free-geometry canvas { direction: ltr; }
+.free-equation-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.free-equation-list { list-style: none; padding: 0; margin: 0; }
+.free-equation-row { display: grid; grid-template-columns: 20px 32px minmax(0, 1fr) 34px 34px; gap: 8px; align-items: center; padding-block: 8px; border-bottom: 1px solid var(--line); }
+.free-equation-row code { min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
+.free-equation-row input[type="color"] { width: 28px; height: 28px; padding: 2px; cursor: pointer; }
+
 .proof-stage,
 .geometry-stage,
 .circle-stage,

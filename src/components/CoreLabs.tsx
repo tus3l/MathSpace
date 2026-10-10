@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Lightbulb,
   MoveUpRight,
@@ -6,8 +6,12 @@ import {
   Check,
   ArrowLeft,
   CircleHelp,
+  Plus,
+  Pencil,
+  Trash2,
+  X,
 } from "lucide-react";
-import { Formula, Slider, Timeline, Why } from "./Controls";
+import { Formula, MathInput, Slider, Timeline, Why } from "./Controls";
 import { Graph } from "./Graph";
 import {
   analyze,
@@ -20,7 +24,11 @@ import {
 } from "../engine/math";
 import { riemann } from "../engine/simulations";
 import { MathTools } from "./MathTools";
-import { prepareVisualExpression } from "../engine/visual";
+import {
+  prepareVisualExpression,
+  prepareWorkspaceVisual,
+  visualInputParameters,
+} from "../engine/visual";
 import type { VisualParameter } from "../engine/visual";
 import { functionFamilies } from "../content/knowledge";
 
@@ -107,8 +115,9 @@ export function ProofLab() {
     }
   }
   const total = a + b,
-    sideA = (290 * a) / total,
-    sideB = (290 * b) / total;
+    sideA = 24 * a,
+    sideB = 24 * b,
+    squareSide = sideA + sideB;
   const steps = [
     "المربع الكامل",
     "تقسيم الأضلاع",
@@ -249,9 +258,10 @@ export function ProofLab() {
             }))}
           />
           <Insight>
-            غيّر رقمًا في التعبير أو قيمة أحد المعاملات؛ يتحدث الرسم مباشرة وينتقل
-            إلى الشكل الجديد مرة واحدة ثم يثبت. للمعادلة نرسم طرفيها؛ تقاطعهما يوضح مساواتهما عند
-            تلك القيم، وليس إثباتًا عامًا لهوية أو معادلة.
+            غيّر رقمًا في التعبير أو قيمة أحد المعاملات؛ يتحدث الرسم مباشرة
+            وينتقل إلى الشكل الجديد مرة واحدة ثم يثبت. للمعادلة نرسم طرفيها؛
+            تقاطعهما يوضح مساواتهما عند تلك القيم، وليس إثباتًا عامًا لهوية أو
+            معادلة.
             {custom.operation === "integral" &&
               " عند التكامل يعرض الرسم الدالة الأصلية مع C = 0."}
           </Insight>
@@ -282,18 +292,23 @@ export function ProofLab() {
                   role="img"
                   aria-label="إثبات مساحة مربع مجموع عددين"
                 >
-                  <g transform="translate(110,65)">
+                  <g transform={`translate(${(540 - squareSide) / 2},65)`}>
                     {current === 0 ? (
                       <>
                         <rect
-                          width="290"
-                          height="290"
+                          width={squareSide}
+                          height={squareSide}
                           fill="#7770ce"
                           fillOpacity="0.14"
                           stroke="#7770ce"
                           strokeWidth="2"
                         />
-                        <text x="145" y="145" className="svg-big">
+                        <text
+                          x={squareSide / 2}
+                          y={squareSide / 2}
+                          className="svg-big"
+                          style={{ fontSize: Math.min(24, squareSide / 5) }}
+                        >
                           (a+b)²
                         </text>
                       </>
@@ -321,16 +336,40 @@ export function ProofLab() {
                           />
                           <text
                             x={piece.x + piece.sizeX / 2}
-                            y={piece.y + piece.sizeY / 2}
+                            y={
+                              piece.y +
+                              piece.sizeY / 2 -
+                              (current === 3
+                                ? Math.min(14, piece.sizeY / 4)
+                                : 0)
+                            }
                             className="svg-big"
+                            style={{
+                              fontSize: Math.min(
+                                24,
+                                piece.sizeX / 3,
+                                piece.sizeY / 3,
+                              ),
+                            }}
                           >
                             {current >= 2 ? piece.label : ""}
                           </text>
                           {current === 3 && (
                             <text
                               x={piece.x + piece.sizeX / 2}
-                              y={piece.y + piece.sizeY / 2 + 28}
+                              y={
+                                piece.y +
+                                piece.sizeY / 2 +
+                                Math.min(14, piece.sizeY / 4)
+                              }
                               className="svg-small"
+                              style={{
+                                fontSize: Math.min(
+                                  14,
+                                  piece.sizeX / 3,
+                                  piece.sizeY / 3,
+                                ),
+                              }}
                             >
                               {fmt(piece.value)}
                             </text>
@@ -338,13 +377,27 @@ export function ProofLab() {
                         </g>
                       ))
                     )}
-                    <text x={sideA / 2} y="-18" className="svg-medium">
+                    <text
+                      x={sideA / 2 - 12}
+                      y="-18"
+                      className="svg-medium"
+                      style={{ textAnchor: "end" }}
+                    >
                       a = {a}
                     </text>
-                    <text x={sideA + sideB / 2} y="-18" className="svg-medium">
+                    <text
+                      x={sideA + sideB / 2 + 12}
+                      y="-18"
+                      className="svg-medium"
+                      style={{ textAnchor: "start" }}
+                    >
                       b = {b}
                     </text>
-                    <text x="145" y="325" className="svg-medium">
+                    <text
+                      x={squareSide / 2}
+                      y={squareSide + 35}
+                      className="svg-medium"
+                    >
                       a + b = {total}
                     </text>
                   </g>
@@ -473,6 +526,263 @@ export function ProofLab() {
     </>
   );
 }
+function FreeGeometryWorkspace() {
+  const [equations, setEquations] = useState<
+    {
+      id: string;
+      expression: string;
+      color: string;
+      visible: boolean;
+    }[]
+  >([]);
+  const [draft, setDraft] = useState("");
+  const [editing, setEditing] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const [scope, setScope] = useState({ a: 1, b: 1, c: 0 });
+  const visuals = useMemo(
+    () =>
+      equations
+        .filter((equation) => equation.visible)
+        .map((equation) => {
+          try {
+            return {
+              equation,
+              visual: prepareWorkspaceVisual(equation.expression, scope),
+              error: "",
+            };
+          } catch (failure) {
+            return {
+              equation,
+              visual: null,
+              error:
+                failure instanceof Error
+                  ? failure.message
+                  : "تعذر رسم المعادلة.",
+            };
+          }
+        }),
+    [equations, scope],
+  );
+  const parameters = [
+    ...new Set(
+      equations.flatMap((equation) =>
+        visualInputParameters(equation.expression),
+      ),
+    ),
+  ];
+  const palette = ["#249b8d", "#e28e4e", "#7770ce", "#d55a78", "#408cc0"];
+  function cancelEdit() {
+    setEditing(null);
+    setDraft("");
+    setError("");
+  }
+  return (
+    <div className="free-geometry">
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          try {
+            prepareWorkspaceVisual(draft, scope);
+            const expression = normalize(draft);
+            setEquations((current) =>
+              editing
+                ? current.map((equation) =>
+                    equation.id === editing
+                      ? { ...equation, expression }
+                      : equation,
+                  )
+                : [
+                    ...current,
+                    {
+                      id: crypto.randomUUID(),
+                      expression,
+                      color: palette[current.length % palette.length],
+                      visible: true,
+                    },
+                  ],
+            );
+            cancelEdit();
+          } catch (failure) {
+            setError(
+              failure instanceof Error ? failure.message : "تعذر رسم المعادلة.",
+            );
+          }
+        }}
+      >
+        <MathInput
+          label="معادلة المساحة الحرة"
+          value={draft}
+          onChange={setDraft}
+          variables={["x", "y", "a", "b", "c"]}
+          keyboardInitiallyOpen={false}
+          required
+        />
+        <div className="free-equation-actions">
+          <button className="button secondary" type="submit">
+            {editing ? <Check size={16} /> : <Plus size={16} />}
+            {editing ? "حفظ التعديل" : "إضافة معادلة"}
+          </button>
+          {editing && (
+            <button
+              className="icon-button"
+              type="button"
+              title="إلغاء التعديل"
+              aria-label="إلغاء التعديل"
+              onClick={cancelEdit}
+            >
+              <X size={16} />
+            </button>
+          )}
+          <button
+            className="icon-button"
+            type="button"
+            title="مسح المساحة"
+            aria-label="مسح المساحة"
+            disabled={!equations.length}
+            onClick={() => {
+              setEquations([]);
+              cancelEdit();
+            }}
+          >
+            <Trash2 size={16} />
+          </button>
+        </div>
+      </form>
+      {error && (
+        <p className="error-message" role="alert">
+          {error}
+        </p>
+      )}
+      {equations.length > 0 && (
+        <ul className="free-equation-list">
+          {equations.map((equation, index) => (
+            <li key={equation.id} className="free-equation-row">
+              <input
+                type="checkbox"
+                aria-label={`عرض المعادلة ${index + 1}`}
+                checked={equation.visible}
+                onChange={(event) =>
+                  setEquations((current) =>
+                    current.map((item) =>
+                      item.id === equation.id
+                        ? { ...item, visible: event.target.checked }
+                        : item,
+                    ),
+                  )
+                }
+              />
+              <input
+                type="color"
+                aria-label={`لون المعادلة ${index + 1}`}
+                value={equation.color}
+                onChange={(event) =>
+                  setEquations((current) =>
+                    current.map((item) =>
+                      item.id === equation.id
+                        ? { ...item, color: event.target.value }
+                        : item,
+                    ),
+                  )
+                }
+              />
+              <code dir="ltr">{equation.expression}</code>
+              <button
+                className="icon-button"
+                type="button"
+                title={`تعديل المعادلة ${index + 1}`}
+                aria-label={`تعديل المعادلة ${index + 1}`}
+                onClick={() => {
+                  setDraft(equation.expression);
+                  setEditing(equation.id);
+                  setError("");
+                }}
+              >
+                <Pencil size={16} />
+              </button>
+              <button
+                className="icon-button"
+                type="button"
+                title={`حذف المعادلة ${index + 1}`}
+                aria-label={`حذف المعادلة ${index + 1}`}
+                onClick={() => {
+                  setEquations((current) =>
+                    current.filter((item) => item.id !== equation.id),
+                  );
+                  if (editing === equation.id) cancelEdit();
+                }}
+              >
+                <Trash2 size={16} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {parameters.length > 0 && (
+        <div className="visual-parameter-controls">
+          {parameters.map((parameter) => (
+            <Slider
+              key={parameter}
+              label={parameter}
+              min={-10}
+              max={10}
+              step={0.1}
+              value={scope[parameter]}
+              onChange={(value) =>
+                setScope((current) => ({ ...current, [parameter]: value }))
+              }
+            />
+          ))}
+        </div>
+      )}
+      {visuals
+        .filter((item) => item.error)
+        .map((item) => (
+          <p className="error-message" role="alert" key={item.equation.id}>
+            <code dir="ltr">{item.equation.expression}</code>: {item.error}
+          </p>
+        ))}
+      <Graph
+        autoFit
+        autoFitKey={equations
+          .filter((equation) => equation.visible)
+          .map((equation) => equation.id)
+          .join(",")}
+        scope={scope}
+        curves={visuals.flatMap(
+          ({ equation, visual }) =>
+            visual?.expressions.map((expression) => ({
+              expression,
+              color: equation.color,
+              label: equation.expression,
+            })) ?? [],
+        )}
+        points={visuals.flatMap(
+          ({ equation, visual }) =>
+            visual?.points.map((point) => ({
+              ...point,
+              color: equation.color,
+            })) ?? [],
+        )}
+        segments={visuals.flatMap(
+          ({ equation, visual }) =>
+            visual?.segments.map((segment) => ({
+              ...segment,
+              color: equation.color,
+            })) ?? [],
+        )}
+      />
+      {visuals.map(
+        ({ equation, visual }) =>
+          visual && (
+            <p className="visual-caption" key={equation.id}>
+              {visual.kind}: {visual.description}
+            </p>
+          ),
+      )}
+    </div>
+  );
+}
+
 export function GeometryLab() {
   const [shape, setShape] = useState("circle"),
     [radius, setRadius] = useState(3),
@@ -501,16 +811,21 @@ export function GeometryLab() {
   return (
     <>
       <LabHeader english="GEOMETRY LAB" title="معمل الهندسة" />
-      <div className="lab-layout">
+      <div
+        className={
+          shape === "free" ? "lab-layout free-geometry-layout" : "lab-layout"
+        }
+      >
         <section className="lab-stage">
-          <div className="section-heading">
-            <h2>الشكل والقياسات</h2>
+          <div className="section-heading geometry-heading">
+            <h2>{shape === "free" ? "مساحة حرة" : "الشكل والقياسات"}</h2>
             <div className="segmented">
               {[
                 ["circle", "دائرة"],
                 ["rectangle", "مستطيل"],
                 ["triangle", "مثلث"],
                 ["segment", "قطعة"],
+                ["free", "مساحة حرة"],
               ].map(([id, name]) => (
                 <button
                   key={id}
@@ -522,254 +837,266 @@ export function GeometryLab() {
               ))}
             </div>
           </div>
-          <div className="geometry-stage">
-            <svg
-              viewBox="0 0 650 430"
-              role="img"
-              aria-label="شكل هندسي قابل لتغيير الأبعاد"
-              onPointerMove={(event) => {
-                if (!dragging) return;
-                const bounds = event.currentTarget.getBoundingClientRect();
-                setVertex({
-                  x: Math.max(
-                    0,
-                    Math.min(
-                      10,
-                      (((event.clientX - bounds.left) * 650) / bounds.width -
-                        120) /
-                        40,
-                    ),
-                  ),
-                  y: Math.max(
-                    0.5,
-                    Math.min(
-                      7,
-                      (350 -
-                        ((event.clientY - bounds.top) * 430) / bounds.height) /
-                        40,
-                    ),
-                  ),
-                });
-              }}
-              onPointerUp={() => setDragging(false)}
-              onPointerCancel={() => setDragging(false)}
-            >
-              <defs>
-                <pattern
-                  id="geometry-grid"
-                  width="40"
-                  height="40"
-                  patternUnits="userSpaceOnUse"
-                >
-                  <path
-                    d="M 40 0 L 0 0 0 40"
-                    fill="none"
-                    stroke="var(--grid)"
-                  />
-                </pattern>
-              </defs>
-              <rect width="650" height="430" fill="url(#geometry-grid)" />
-              {shape === "circle" ? (
-                <g>
-                  <circle
-                    cx="325"
-                    cy="215"
-                    r={radius * 25}
-                    fill="#7770ce"
-                    fillOpacity="0.12"
-                    stroke="#7770ce"
-                    strokeWidth="2.5"
-                  />
-                  <line
-                    x1="325"
-                    y1="215"
-                    x2={325 + radius * 25}
-                    y2="215"
-                    stroke="#e28e4e"
-                    strokeWidth="2"
-                  />
-                  <circle cx="325" cy="215" r="4" fill="#7770ce" />
-                  <text x={325 + radius * 12} y="202" className="svg-medium">
-                    r = {radius}
-                  </text>
-                </g>
-              ) : shape === "triangle" ? (
-                <g>
-                  <polygon
-                    points={`120,350 ${120 + width * 40},350 ${120 + vertex.x * 40},${350 - vertex.y * 40}`}
-                    fill="#249b8d"
-                    fillOpacity="0.12"
-                    stroke="#249b8d"
-                    strokeWidth="2.5"
-                  />
-                  <line
-                    x1={120 + vertex.x * 40}
-                    y1="350"
-                    x2={120 + vertex.x * 40}
-                    y2={350 - vertex.y * 40}
-                    stroke="#e28e4e"
-                    strokeDasharray="5 5"
-                  />
-                  <circle
-                    className="draggable-point"
-                    cx={120 + vertex.x * 40}
-                    cy={350 - vertex.y * 40}
-                    r="8"
-                    fill="#e28e4e"
-                    onPointerDown={(event) => {
-                      event.currentTarget.setPointerCapture(event.pointerId);
-                      setDragging(true);
-                    }}
-                  />
-                  <text
-                    x={130 + vertex.x * 40}
-                    y={350 - vertex.y * 20}
-                    className="svg-small"
-                  >
-                    h = {fmt(vertex.y)}
-                  </text>
-                  <text x={120 + width * 20} y="377" className="svg-medium">
-                    b = {width}
-                  </text>
-                </g>
-              ) : shape === "segment" ? (
-                <g>
-                  <line
-                    x1="120"
-                    y1="350"
-                    x2={120 + width * 40}
-                    y2={350 - height * 40}
-                    stroke="#7770ce"
-                    strokeWidth="3"
-                  />
-                  <circle cx="120" cy="350" r="6" fill="#249b8d" />
-                  <circle
-                    cx={120 + width * 40}
-                    cy={350 - height * 40}
-                    r="6"
-                    fill="#e28e4e"
-                  />
-                  <text x="100" y="377" className="svg-small">
-                    A (0,0)
-                  </text>
-                  <text
-                    x={120 + width * 40}
-                    y={330 - height * 40}
-                    className="svg-small"
-                  >
-                    B ({width},{height})
-                  </text>
-                </g>
-              ) : (
-                <g>
-                  <rect
-                    x="140"
-                    y={330 - height * 35}
-                    width={width * 35}
-                    height={height * 35}
-                    fill="#7770ce"
-                    fillOpacity="0.12"
-                    stroke="#7770ce"
-                    strokeWidth="2.5"
-                  />
-                  <text x={140 + width * 17.5} y="357" className="svg-medium">
-                    w = {width}
-                  </text>
-                  <text x="110" y={330 - height * 17.5} className="svg-medium">
-                    {height}
-                  </text>
-                </g>
-              )}
-            </svg>
+          <div hidden={shape !== "free"}>
+            <FreeGeometryWorkspace />
           </div>
-          <Insight>
-            <p>
-              {shape === "circle"
-                ? "زيادة نصف القطر تضاعف المحيط خطيًا، لكنها تزيد المساحة تربيعيًا: المساحة تعتمد على r²."
-                : shape === "triangle"
-                  ? "تغيير الارتفاع أو سحب الرأس يغير المساحة بنسبة مباشرة مع الارتفاع. التحريك الأفقي وحده لا يغير المساحة ما دامت القاعدة والارتفاع ثابتين."
-                  : shape === "segment"
-                    ? "الطول يتبع فيثاغورس: √(Δx² + Δy²). تغيير أي مركبة يغير المسافة والميل."
-                    : "المساحة حاصل ضرب الطول والعرض. زيادة أحدهما تزيد المساحة مباشرة، والمحيط يجمع أطوال الأضلاع."}
-            </p>
-          </Insight>
+          <div hidden={shape === "free"}>
+            <div className="geometry-stage">
+              <svg
+                viewBox="0 0 650 430"
+                role="img"
+                aria-label="شكل هندسي قابل لتغيير الأبعاد"
+                onPointerMove={(event) => {
+                  if (!dragging) return;
+                  const bounds = event.currentTarget.getBoundingClientRect();
+                  setVertex({
+                    x: Math.max(
+                      0,
+                      Math.min(
+                        10,
+                        (((event.clientX - bounds.left) * 650) / bounds.width -
+                          120) /
+                          40,
+                      ),
+                    ),
+                    y: Math.max(
+                      0.5,
+                      Math.min(
+                        7,
+                        (350 -
+                          ((event.clientY - bounds.top) * 430) /
+                            bounds.height) /
+                          40,
+                      ),
+                    ),
+                  });
+                }}
+                onPointerUp={() => setDragging(false)}
+                onPointerCancel={() => setDragging(false)}
+              >
+                <defs>
+                  <pattern
+                    id="geometry-grid"
+                    width="40"
+                    height="40"
+                    patternUnits="userSpaceOnUse"
+                  >
+                    <path
+                      d="M 40 0 L 0 0 0 40"
+                      fill="none"
+                      stroke="var(--grid)"
+                    />
+                  </pattern>
+                </defs>
+                <rect width="650" height="430" fill="url(#geometry-grid)" />
+                {shape === "circle" ? (
+                  <g>
+                    <circle
+                      cx="325"
+                      cy="215"
+                      r={radius * 25}
+                      fill="#7770ce"
+                      fillOpacity="0.12"
+                      stroke="#7770ce"
+                      strokeWidth="2.5"
+                    />
+                    <line
+                      x1="325"
+                      y1="215"
+                      x2={325 + radius * 25}
+                      y2="215"
+                      stroke="#e28e4e"
+                      strokeWidth="2"
+                    />
+                    <circle cx="325" cy="215" r="4" fill="#7770ce" />
+                    <text x={325 + radius * 12} y="202" className="svg-medium">
+                      r = {radius}
+                    </text>
+                  </g>
+                ) : shape === "triangle" ? (
+                  <g>
+                    <polygon
+                      points={`120,350 ${120 + width * 40},350 ${120 + vertex.x * 40},${350 - vertex.y * 40}`}
+                      fill="#249b8d"
+                      fillOpacity="0.12"
+                      stroke="#249b8d"
+                      strokeWidth="2.5"
+                    />
+                    <line
+                      x1={120 + vertex.x * 40}
+                      y1="350"
+                      x2={120 + vertex.x * 40}
+                      y2={350 - vertex.y * 40}
+                      stroke="#e28e4e"
+                      strokeDasharray="5 5"
+                    />
+                    <circle
+                      className="draggable-point"
+                      cx={120 + vertex.x * 40}
+                      cy={350 - vertex.y * 40}
+                      r="8"
+                      fill="#e28e4e"
+                      onPointerDown={(event) => {
+                        event.currentTarget.setPointerCapture(event.pointerId);
+                        setDragging(true);
+                      }}
+                    />
+                    <text
+                      x={130 + vertex.x * 40}
+                      y={350 - vertex.y * 20}
+                      className="svg-small"
+                    >
+                      h = {fmt(vertex.y)}
+                    </text>
+                    <text x={120 + width * 20} y="377" className="svg-medium">
+                      b = {width}
+                    </text>
+                  </g>
+                ) : shape === "segment" ? (
+                  <g>
+                    <line
+                      x1="120"
+                      y1="350"
+                      x2={120 + width * 40}
+                      y2={350 - height * 40}
+                      stroke="#7770ce"
+                      strokeWidth="3"
+                    />
+                    <circle cx="120" cy="350" r="6" fill="#249b8d" />
+                    <circle
+                      cx={120 + width * 40}
+                      cy={350 - height * 40}
+                      r="6"
+                      fill="#e28e4e"
+                    />
+                    <text x="100" y="377" className="svg-small">
+                      A (0,0)
+                    </text>
+                    <text
+                      x={120 + width * 40}
+                      y={330 - height * 40}
+                      className="svg-small"
+                    >
+                      B ({width},{height})
+                    </text>
+                  </g>
+                ) : (
+                  <g>
+                    <rect
+                      x="140"
+                      y={330 - height * 35}
+                      width={width * 35}
+                      height={height * 35}
+                      fill="#7770ce"
+                      fillOpacity="0.12"
+                      stroke="#7770ce"
+                      strokeWidth="2.5"
+                    />
+                    <text x={140 + width * 17.5} y="357" className="svg-medium">
+                      w = {width}
+                    </text>
+                    <text
+                      x="110"
+                      y={330 - height * 17.5}
+                      className="svg-medium"
+                    >
+                      {height}
+                    </text>
+                  </g>
+                )}
+              </svg>
+            </div>
+            <Insight>
+              <p>
+                {shape === "circle"
+                  ? "زيادة نصف القطر تضاعف المحيط خطيًا، لكنها تزيد المساحة تربيعيًا: المساحة تعتمد على r²."
+                  : shape === "triangle"
+                    ? "تغيير الارتفاع أو سحب الرأس يغير المساحة بنسبة مباشرة مع الارتفاع. التحريك الأفقي وحده لا يغير المساحة ما دامت القاعدة والارتفاع ثابتين."
+                    : shape === "segment"
+                      ? "الطول يتبع فيثاغورس: √(Δx² + Δy²). تغيير أي مركبة يغير المسافة والميل."
+                      : "المساحة حاصل ضرب الطول والعرض. زيادة أحدهما تزيد المساحة مباشرة، والمحيط يجمع أطوال الأضلاع."}
+              </p>
+            </Insight>
+          </div>
         </section>
-        <aside className="lab-properties">
-          <h3>خصائص الشكل</h3>
-          {shape === "circle" ? (
-            <Slider
-              label="r"
-              min={0.5}
-              max={7}
-              step={0.1}
-              value={radius}
-              onChange={setRadius}
-            />
-          ) : (
-            <>
+        {shape !== "free" && (
+          <aside className="lab-properties">
+            <h3>خصائص الشكل</h3>
+            {shape === "circle" ? (
               <Slider
-                label={shape === "triangle" ? "b" : "w / Δx"}
-                min={1}
-                max={10}
-                step={0.5}
-                value={width}
-                onChange={setWidth}
-              />
-              <Slider
-                label={shape === "triangle" ? "h" : "h / Δy"}
+                label="r"
                 min={0.5}
                 max={7}
                 step={0.1}
-                value={shape === "triangle" ? vertex.y : height}
-                onChange={(value) =>
-                  shape === "triangle"
-                    ? setVertex({ ...vertex, y: value })
-                    : setHeight(value)
-                }
+                value={radius}
+                onChange={setRadius}
               />
-            </>
-          )}
-          <div className="metrics-stack">
-            {shape !== "segment" && (
-              <div className="metric">
-                <span>المساحة</span>
-                <strong>{fmt(area)}</strong>
-              </div>
+            ) : (
+              <>
+                <Slider
+                  label={shape === "triangle" ? "b" : "w / Δx"}
+                  min={1}
+                  max={10}
+                  step={0.5}
+                  value={width}
+                  onChange={setWidth}
+                />
+                <Slider
+                  label={shape === "triangle" ? "h" : "h / Δy"}
+                  min={0.5}
+                  max={7}
+                  step={0.1}
+                  value={shape === "triangle" ? vertex.y : height}
+                  onChange={(value) =>
+                    shape === "triangle"
+                      ? setVertex({ ...vertex, y: value })
+                      : setHeight(value)
+                  }
+                />
+              </>
             )}
-            <div className="metric">
-              <span>{shape === "segment" ? "الطول" : "المحيط"}</span>
-              <strong>{fmt(perimeter)}</strong>
+            <div className="metrics-stack">
+              {shape !== "segment" && (
+                <div className="metric">
+                  <span>المساحة</span>
+                  <strong>{fmt(area)}</strong>
+                </div>
+              )}
+              <div className="metric">
+                <span>{shape === "segment" ? "الطول" : "المحيط"}</span>
+                <strong>{fmt(perimeter)}</strong>
+              </div>
+              {shape === "circle" && (
+                <div className="metric">
+                  <span>القطر</span>
+                  <strong>{fmt(2 * radius)}</strong>
+                </div>
+              )}
+              {shape === "segment" && (
+                <div className="metric">
+                  <span>الميل</span>
+                  <strong>{fmt(height / width)}</strong>
+                </div>
+              )}
             </div>
-            {shape === "circle" && (
-              <div className="metric">
-                <span>القطر</span>
-                <strong>{fmt(2 * radius)}</strong>
-              </div>
-            )}
-            {shape === "segment" && (
-              <div className="metric">
-                <span>الميل</span>
-                <strong>{fmt(height / width)}</strong>
-              </div>
-            )}
-          </div>
-          <Formula
-            value={
-              shape === "circle"
-                ? String.raw`A=\pi r^2,\ C=2\pi r`
-                : shape === "triangle"
-                  ? String.raw`A=\frac{1}{2}bh`
-                  : shape === "segment"
-                    ? String.raw`d=\sqrt{\Delta x^2+\Delta y^2}`
-                    : "A=wh"
-            }
-            block
-          />
-          <Why>
-            القانون مرتبط بالشكل نفسه، لا بأرقام المثال فقط. القياسات تُحسب من
-            الأبعاد الحالية عند كل تغيير.
-          </Why>
-        </aside>
+            <Formula
+              value={
+                shape === "circle"
+                  ? String.raw`A=\pi r^2,\ C=2\pi r`
+                  : shape === "triangle"
+                    ? String.raw`A=\frac{1}{2}bh`
+                    : shape === "segment"
+                      ? String.raw`d=\sqrt{\Delta x^2+\Delta y^2}`
+                      : "A=wh"
+              }
+              block
+            />
+            <Why>
+              القانون مرتبط بالشكل نفسه، لا بأرقام المثال فقط. القياسات تُحسب من
+              الأبعاد الحالية عند كل تغيير.
+            </Why>
+          </aside>
+        )}
       </div>
     </>
   );

@@ -19,7 +19,7 @@ export type LawAttempt = Verdict & {
   source: string;
   output: string;
   preview: string;
-  steps: Step[];
+  steps: (Step & { visualExpression?: string })[];
   purpose: "solve" | "transform" | "derivative" | "integral" | "measure";
 };
 export const learningLaws = [
@@ -49,6 +49,18 @@ export const learningLaws = [
       "ضلعان معلومان والزاوية المحصورة بينهما؛ يصلح للمثلث القائم وغير القائم.",
   },
 ];
+
+export function lawStepVisual(attempt: LawAttempt, index: number) {
+  const step = attempt.steps[index];
+  if (!step) return null;
+  const expression = step.visualExpression ?? step.after;
+  try {
+    prepareWorkspaceVisual(expression, {});
+    return expression;
+  } catch {
+    return null;
+  }
+}
 
 export function verifyTransition(before: string, after: string): Verdict {
   try {
@@ -159,6 +171,12 @@ export function tryLaw(source: string, lawId: string): LawAttempt {
       {
         before: source,
         after: output,
+        visualExpression:
+          purpose === "measure" ||
+          purpose === "derivative" ||
+          purpose === "integral"
+            ? preview
+            : undefined,
         operation: base.title,
         rule: base.title,
         reason,
@@ -206,17 +224,69 @@ export function tryLaw(source: string, lawId: string): LawAttempt {
           return reject(
             "الزاوية المحصورة ليست قائمة؛ لا يجوز حساب الضلع المقابل بجمع المربعين. حد -2ab cos(θ) غير صفري. استخدم قانون جيب التمام.",
           );
+        const squared =
+          firstLength ** 2 +
+          secondLength ** 2 -
+          (lawId === "cosine" ? 2 * dot : 0);
         const result =
           lawId === "triangle"
             ? Math.abs(first.x * second.y - first.y * second.x) / 2
+            : Math.sqrt(Math.max(0, squared));
+        const reference =
+          lawId === "triangle"
+            ? (firstLength * Math.abs(second.y)) / 2
             : Math.hypot(first.x - second.x, first.y - second.y);
+        if (
+          !Number.isFinite(result) ||
+          Math.abs(result - reference) >
+            1e-10 * Math.max(1, Math.abs(reference))
+        )
+          return reject(
+            "نتيجة التعويض في القانون لا تطابق القياس الهندسي المستقل؛ لا يمكن اعتماد التطبيق.",
+            null,
+          );
         const reason =
           lawId === "triangle"
             ? "المساحة نصف القاعدة في الارتفاع العمودي؛ الارتفاع هو b sin(θ)، وليس الضلع المائل."
             : lawId === "pythagoras"
               ? "الزاوية المحصورة قائمة والضلع المقابل هو الوتر؛ مجموع مربعي الضلعين يساوي مربع الوتر."
               : "المعطيات توفر ضلعين والزاوية المحصورة. نصحح مجموع المربعين بالحد -2ab cos(θ)؛ في القائمة يساوي هذا الحد صفرًا.";
-        return make(fmt(result), source, reason, "measure");
+        const applied = make(fmt(result), source, reason, "measure");
+        applied.steps = [
+          {
+            before: source,
+            after: `a=${fmt(firstLength)}, b=${fmt(secondLength)}`,
+            operation: "قراءة الضلعين والزاوية",
+            rule: base.title,
+            reason: visual.description,
+            visualExpression: source,
+          },
+          {
+            before: law.formula,
+            after:
+              lawId === "triangle"
+                ? `A=(${fmt(firstLength)})*(${fmt(Math.abs(second.y))})/2`
+                : `c^2=${fmt(firstLength ** 2)}+${fmt(secondLength ** 2)}${lawId === "cosine" ? `-(${fmt(2 * dot)})` : ""}`,
+            operation: "التعويض في القانون المختار",
+            rule: base.title,
+            reason,
+          },
+          {
+            before: lawId === "triangle" ? "A=bh/2" : `c^2=${fmt(squared)}`,
+            after: `${lawId === "triangle" ? "A" : "c"}=${fmt(result)}`,
+            operation:
+              lawId === "triangle"
+                ? "حساب المساحة والتحقق"
+                : "أخذ الجذر الموجب والتحقق",
+            rule: base.title,
+            reason: `النتيجة ${fmt(result)} تطابق القياس المستقل من الإحداثيات. ${lawId === "triangle" ? "نستخدم الارتفاع العمودي لا الضلع المائل." : "الطول غير سالب؛ ننقل متجه الضلع المقابل إلى الأصل لإظهار مقداره دون تغيير طوله."}`,
+            visualExpression:
+              lawId === "triangle"
+                ? source
+                : `vector(${first.x - second.x},${first.y - second.y})`,
+          },
+        ];
+        return applied;
       }
       if (visual.kind === "متجه" && ["vectors", "pythagoras"].includes(lawId)) {
         const point = visual.points[0];
@@ -418,12 +488,28 @@ export function verifyFinal(
         "لم تدخل نتيجة نهائية بعد؛ نجاح تطبيق القانون لا يعني اكتمال حل الطالب.",
     };
   if (attempt?.valid && attempt.purpose === "measure") {
-    const value = Number(normalize(answer));
-    if (!Number.isFinite(value))
-      return { valid: null, message: "اكتب القيمة العددية للقياس الذي طبقته." };
-    const valid =
-      Math.abs(value - Number(attempt.output)) <=
-      1e-6 * Math.max(1, Math.abs(Number(attempt.output)));
+    let value: unknown;
+    try {
+      value = safeParse(answer, []).compile().evaluate();
+    } catch {
+      return {
+        valid: null,
+        message: "اكتب قياسًا عدديًا أو تعبيرًا مثل sqrt(13).",
+      };
+    }
+    if (typeof value !== "number" || !Number.isFinite(value))
+      return {
+        valid: null,
+        message: "القياس يجب أن يكون عددًا حقيقيًا منتهيًا.",
+      };
+    const expected = Number(attempt.output);
+    const tolerance =
+      expected === 0
+        ? 0
+        : Math.abs(expected) < 1e-6
+          ? 5e-5 * Math.abs(expected)
+          : 1e-6 * Math.max(1, Math.abs(expected));
+    const valid = Math.abs(value - expected) <= tolerance;
     return {
       valid,
       message: valid
@@ -454,10 +540,7 @@ export function verifyFinal(
       const constantRate = Number(
         symbolic(derivative(node, "C").toString(), "simplify", ["x", "C"]),
       );
-      if (
-        differentiated.includes("C") ||
-        constantRate === 0
-      )
+      if (differentiated.includes("C") || constantRate === 0)
         return {
           valid: false,
           message:

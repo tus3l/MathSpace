@@ -1,3 +1,7 @@
+import { parse } from "mathjs";
+import type { MathNode } from "mathjs";
+import { normalize } from "../engine/math";
+
 export type MathKey = {
   title: string;
   latex: string;
@@ -5,6 +9,7 @@ export type MathKey = {
   suffix?: string;
   fallback?: string;
   operation?: boolean;
+  notationOnly?: boolean;
 };
 
 export const mathKeyGroups: { title: string; keys: MathKey[] }[] = [
@@ -167,9 +172,180 @@ export const mathKeyGroups: { title: string; keys: MathKey[] }[] = [
         suffix: ") dx",
         operation: true,
       },
+      {
+        title: "تكامل محدد؛ إدخال فقط دون حساب تلقائي",
+        latex: "\\int_0^1 f(x)\\,dx",
+        prefix: "definiteIntegral(",
+        suffix: ",0,1)",
+        operation: true,
+        notationOnly: true,
+      },
+      {
+        title: "نهاية؛ إدخال فقط دون حساب تلقائي",
+        latex: "\\lim_{x\\to0} f(x)",
+        prefix: "limit(",
+        suffix: ",x,0)",
+        operation: true,
+        notationOnly: true,
+      },
+      {
+        title: "مجموع؛ إدخال فقط دون حساب تلقائي",
+        latex: "\\sum_{n=1}^{10} f(n)",
+        prefix: "sum(",
+        suffix: ",n,1,10)",
+        fallback: "n",
+        operation: true,
+        notationOnly: true,
+      },
+    ],
+  },
+  {
+    title: "الهندسة والإحداثيات",
+    keys: [
+      {
+        title: "نقطة؛ إحداثيان",
+        latex: "(x,y)",
+        prefix: "point(",
+        fallback: "2",
+        suffix: ",3)",
+      },
+      {
+        title: "دائرة؛ نصف قطر موجب",
+        latex: "\\bigcirc\\;r",
+        prefix: "circle(",
+        fallback: "3",
+        suffix: ")",
+      },
+      {
+        title: "مثلث؛ ضلعان وزاوية محصورة بالدرجات",
+        latex: "\\triangle\\;(a,b,\\theta)",
+        prefix: "triangle(",
+        fallback: "3",
+        suffix: ",4,90)",
+      },
+      {
+        title: "زاوية بالدرجات",
+        latex: "\\angle\\theta",
+        prefix: "angle(",
+        fallback: "60",
+        suffix: ")",
+      },
+      {
+        title: "معادلة دائرة",
+        latex: "x^2+y^2=r^2",
+        prefix: "x^2+y^2=(",
+        fallback: "3",
+        suffix: ")^2",
+        operation: true,
+      },
+      {
+        title: "قطع ناقص",
+        latex: "\\frac{x^2}{9}+\\frac{y^2}{4}=1",
+        prefix: "x^2/9+y^2/4=1",
+        fallback: "",
+        operation: true,
+      },
+      {
+        title: "قطع زائد",
+        latex: "x^2-y^2=1",
+        prefix: "x^2-y^2=1",
+        fallback: "",
+        operation: true,
+      },
+    ],
+  },
+  {
+    title: "المتجهات والمصفوفات",
+    keys: [
+      {
+        title: "متجه ثنائي الأبعاد",
+        latex: "\\vec{v}=(a,b)",
+        prefix: "vector(",
+        fallback: "3",
+        suffix: ",4)",
+      },
+      {
+        title: "مصفوفة 2×2؛ عدل العناصر",
+        latex: "\\begin{pmatrix}1&0\\\\0&1\\end{pmatrix}",
+        prefix: "[[",
+        fallback: "1",
+        suffix: ",0],[0,1]]",
+      },
+      {
+        title: "مصفوفة دوران 90 درجة",
+        latex: "\\begin{pmatrix}0&-1\\\\1&0\\end{pmatrix}",
+        prefix: "[[0,-1],[1,0]]",
+        fallback: "",
+        operation: true,
+      },
+      {
+        title: "فاصلة بين الإحداثيات أو العناصر",
+        latex: ",",
+        prefix: ",",
+        fallback: "",
+      },
+      { title: "قوس مصفوفة أيسر", latex: "[", prefix: "[", fallback: "" },
+      { title: "قوس مصفوفة أيمن", latex: "]", prefix: "]", fallback: "" },
+    ],
+  },
+  {
+    title: "العلاقات والرموز",
+    keys: [
+      ...[
+        ["أصغر من", "<", "<"],
+        ["أكبر من", ">", ">"],
+        ["أصغر أو يساوي", "\\le", "<="],
+        ["أكبر أو يساوي", "\\ge", ">="],
+        ["لا يساوي", "\\ne", "!="],
+        ["زائد أو ناقص", "\\pm", "±"],
+        ["ما لا نهاية", "\\infty", "∞"],
+      ].map(([title, latex, prefix]) => ({
+        title: `${title}؛ إدخال فقط دون حل تلقائي`,
+        latex,
+        prefix,
+        fallback: "",
+        notationOnly: true,
+      })),
     ],
   },
 ];
+
+export function keyboardPreview(value: string): string {
+  const source = normalize(value);
+  if (!source || source.length > 250) return "";
+  const request = source.match(/^(definiteIntegral|limit|sum)\((.*)\)$/);
+  if (request) {
+    const node = parse(source);
+    if (!("args" in node)) return "";
+    const args = node.args as MathNode[];
+    if (request[1] === "definiteIntegral" && args.length === 3)
+      return `\\int_{${args[1].toTex()}}^{${args[2].toTex()}} ${args[0].toTex()}\\,dx`;
+    if (request[1] === "limit" && args.length === 3)
+      return `\\lim_{${args[1].toTex()}\\to ${args[2].toTex()}} ${args[0].toTex()}`;
+    if (request[1] === "sum" && args.length === 4)
+      return `\\sum_{${args[1].toTex()}=${args[2].toTex()}}^{${args[3].toTex()}} ${args[0].toTex()}`;
+    return "";
+  }
+  const relations: Record<string, string> = {
+    "<=": "\\le",
+    ">=": "\\ge",
+    "!=": "\\ne",
+    "±": "\\pm",
+    "=": "=",
+    "<": "<",
+    ">": ">",
+  };
+  return source
+    .split(/(<=|>=|!=|±|=|<|>)/)
+    .map((part) =>
+      relations[part]
+        ? ` ${relations[part]} `
+        : part.trim() === "∞"
+          ? "\\infty"
+          : parse(part.replace(/∞/g, "Infinity")).toTex(),
+    )
+    .join("");
+}
 
 export function insertMathKey(
   value: string,

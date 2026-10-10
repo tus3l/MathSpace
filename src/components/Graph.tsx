@@ -623,15 +623,16 @@ export function Graph({
             };
           }}
           onPointerMove={(event) => {
-            if (!drag.current) return;
-            const deltaX = event.clientX - drag.current.x,
-              deltaY = event.clientY - drag.current.y;
+            const activeDrag = drag.current;
+            if (!activeDrag) return;
+            const deltaX = event.clientX - activeDrag.x,
+              deltaY = event.clientY - activeDrag.y;
             if (Math.abs(deltaX) + Math.abs(deltaY) > 4)
-              drag.current.moved = true;
+              activeDrag.moved = true;
             setViewport((current) => ({
               ...current,
-              x: drag.current!.vx - (deltaX * current.span) / size.width,
-              y: drag.current!.vy + (deltaY * current.span) / size.width,
+              x: activeDrag.vx - (deltaX * current.span) / size.width,
+              y: activeDrag.vy + (deltaY * current.span) / size.width,
             }));
           }}
           onPointerUp={(event) => {

@@ -19,6 +19,7 @@ import {
   deleteMathSelection,
   insertMathKey,
   mathKeyGroups,
+  keyboardPreview,
 } from "./mathKeyboard";
 import type { MathKey } from "./mathKeyboard";
 
@@ -29,6 +30,7 @@ export function MathInput({
   required = false,
   variables = ["x"],
   inputRef: externalInputRef,
+  keyboardInitiallyOpen = true,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -36,12 +38,14 @@ export function MathInput({
   required?: boolean;
   variables?: string[];
   inputRef?: RefObject<HTMLInputElement | null>;
+  keyboardInitiallyOpen?: boolean;
 }) {
   const localInputRef = useRef<HTMLInputElement>(null);
   const inputRef = externalInputRef ?? localInputRef;
   const [group, setGroup] = useState(0);
-  const [keyboardOpen, setKeyboardOpen] = useState(true);
+  const [keyboardOpen, setKeyboardOpen] = useState(keyboardInitiallyOpen);
   const [editError, setEditError] = useState("");
+  const [notationNotice, setNotationNotice] = useState("");
   let preview = "";
   try {
     const request = mathRequest(value);
@@ -57,7 +61,11 @@ export function MathInput({
         preview = sides.map((side) => safeParse(side).toTex()).join("=");
     }
   } catch {
-    preview = "";
+    try {
+      preview = keyboardPreview(value);
+    } catch {
+      preview = "";
+    }
   }
   function restoreSelection(start: number, end = start) {
     requestAnimationFrame(() => {
@@ -74,6 +82,11 @@ export function MathInput({
       const next = insertMathKey(value, start, end, key);
       onChange(next.value);
       setEditError("");
+      setNotationNotice(
+        key.notationOnly
+          ? "أُدرجت الصيغة للكتابة والمعاينة؛ حلها أو حسابها تلقائيًا غير مدعوم في هذا الحقل."
+          : "",
+      );
       restoreSelection(next.start, next.end);
     } catch (error) {
       setEditError(
@@ -91,6 +104,7 @@ export function MathInput({
         onChange={(event) => {
           onChange(event.target.value);
           setEditError("");
+          setNotationNotice("");
         }}
         spellCheck={false}
         autoCapitalize="off"
@@ -141,14 +155,41 @@ export function MathInput({
           >
             {(
               mathKeyGroups[group]?.keys ?? [
-                ...Array.from(new Set([...variables, "π", "e"])).map(
-                  (symbol) => ({
-                    title: symbol === "π" ? "باي" : `إدراج ${symbol}`,
-                    latex: symbol === "π" ? "\\pi" : symbol,
-                    prefix: symbol,
-                    fallback: "",
-                  }),
-                ),
+                ...Array.from(
+                  new Set([
+                    ...variables,
+                    "x",
+                    "y",
+                    "a",
+                    "b",
+                    "c",
+                    "n",
+                    "θ",
+                    "C",
+                    "i",
+                    "π",
+                    "e",
+                  ]),
+                ).map((symbol) => ({
+                  title:
+                    symbol === "π"
+                      ? "باي"
+                      : symbol === "C"
+                        ? "ثابت التكامل C"
+                        : symbol === "i"
+                          ? "الوحدة التخيلية i"
+                          : symbol === "θ"
+                            ? "زاوية θ"
+                            : `إدراج ${symbol}`,
+                  latex:
+                    symbol === "π"
+                      ? "\\pi"
+                      : symbol === "θ"
+                        ? "\\theta"
+                        : symbol,
+                  prefix: symbol,
+                  fallback: "",
+                })),
               ]
             ).map((key) => (
               <button
@@ -168,7 +209,7 @@ export function MathInput({
               {group === 2
                 ? "الزوايا بالراديان؛ استخدم زر التحويل للدرجات."
                 : group === 4
-                  ? "العمليات على التعبير كاملًا وبالنسبة إلى x؛ التكامل المحدد والنهايات غير مدعومين هنا."
+                  ? "الاشتقاق والتكامل غير المحدد محسوبان؛ النهاية والتكامل المحدد والمجموع قوالب إدخال فقط."
                   : group === 1
                     ? "استبدل القيم داخل القالب؛ الجذور الكسرية للقيم غير السالبة."
                     : "يمكن تعديل القوالب والأرقام مباشرة من حقل الإدخال."}
@@ -250,6 +291,11 @@ export function MathInput({
             </div>
           </div>
         </div>
+      )}
+      {notationNotice && (
+        <p className="math-notation-notice" role="status">
+          {notationNotice}
+        </p>
       )}
       {editError && (
         <p className="math-keyboard-error" role="alert">

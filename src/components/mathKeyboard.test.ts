@@ -4,7 +4,9 @@ import {
   deleteMathSelection,
   insertMathKey,
   mathKeyGroups,
+  keyboardPreview,
 } from "./mathKeyboard";
+import { prepareWorkspaceVisual } from "../engine/visual";
 
 describe("mathematical keyboard", () => {
   it("inserts literals at the cursor and replaces selected text", () => {
@@ -47,8 +49,10 @@ describe("mathematical keyboard", () => {
     expect(insertMathKey("1".repeat(250), 0, 1, digit).value).toHaveLength(250);
   });
   it("uses supported mathematical templates with finite values in their domains", () => {
-    for (const group of mathKeyGroups) {
-      for (const key of group.keys.filter((item) => item.fallback !== "")) {
+    for (const group of mathKeyGroups.slice(0, 5)) {
+      for (const key of group.keys.filter(
+        (item) => item.fallback !== "" && !item.notationOnly,
+      )) {
         const value = insertMathKey("", 0, 0, key).value;
         const request = mathRequest(value);
         expect(() => safeParse(request.expression)).not.toThrow();
@@ -57,5 +61,29 @@ describe("mathematical keyboard", () => {
         );
       }
     }
+  });
+  it("inserts drawable geometric and matrix templates and selects editable values", () => {
+    for (const group of mathKeyGroups.slice(5, 7))
+      for (const key of group.keys.filter((item) => item.fallback !== "")) {
+        const next = insertMathKey("", 0, 0, key);
+        expect(
+          () => prepareWorkspaceVisual(next.value, { a: 1, b: 1, c: 0 }),
+          key.title,
+        ).not.toThrow();
+        expect(next.value.slice(next.start, next.end)).toBe(key.fallback);
+        expect(keyboardPreview(next.value)).toBeTruthy();
+      }
+  });
+  it("previews notation-only calculus and relations without claiming computation", () => {
+    for (const key of mathKeyGroups[4].keys.filter(
+      (item) => item.notationOnly,
+    )) {
+      const value = insertMathKey("x^2+1", 0, 0, key).value;
+      expect(keyboardPreview(value)).toBeTruthy();
+      expect(() => safeParse(value)).toThrow();
+    }
+    expect(keyboardPreview("x<=5")).toContain("\\le");
+    expect(keyboardPreview("x=2±sqrt(3)")).toContain("\\pm");
+    expect(keyboardPreview("∞")).toBe("\\infty");
   });
 });
