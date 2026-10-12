@@ -36,7 +36,8 @@ export function resolveVisualInput(
   input: string,
   scope: Record<string, number>,
 ) {
-  return normalize(input)
+  const request = mathRequest(input);
+  const expression = request.expression
     .split("=")
     .map((side) =>
       parse(side)
@@ -51,11 +52,14 @@ export function resolveVisualInput(
         .toString(),
     )
     .join("=");
+  return request.operation
+    ? `${request.operation}(${expression})`
+    : expression;
 }
 
 export function visualInputParameters(input: string): VisualParameter[] {
   const parameters = new Set<VisualParameter>();
-  for (const side of normalize(input).split("="))
+  for (const side of mathRequest(input).expression.split("="))
     parse(side).traverse((node) => {
       if (
         node.type === "SymbolNode" &&
@@ -100,7 +104,10 @@ export function prepareWorkspaceVisual(
       throw new Error("المعطيات يجب أن تكون أعدادًا حقيقية منتهية.");
     return value;
   };
-  const parsed = !source.includes("=") ? parse(source) : null;
+  const parsed =
+    !source.includes("=") && !mathRequest(source).operation
+      ? parse(source)
+      : null;
   const functionName =
     parsed?.type === "FunctionNode" ? (parsed as FunctionNode).fn.name : "";
   if (

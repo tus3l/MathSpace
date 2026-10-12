@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compileFunction } from "./math";
+import { analyze, compileFunction } from "./math";
 import {
   interpolateGraphValue,
   sampleGraph,
@@ -11,6 +11,27 @@ import {
 
 describe("animated visual expressions", () => {
   const scope = { a: 3, b: 2, c: 0 };
+  it("prepares typed calculus requests throughout the workspace input path", () => {
+    for (const input of ["∫ (3) dx", "\\int (3) dx", "integral(3)"]) {
+      const visual = prepareWorkspaceVisual(input, scope);
+      expect(visual.operation).toBe("integral");
+      expect(visual.kind).toBe("دالة أصلية؛ C=0");
+      expect(compileFunction(visual.expressions[0])(2)).toBe(6);
+      const source = resolveVisualInput(input, scope);
+      expect(analyze(source).kind).toBe("تكامل غير محدد");
+      expect(analyze(source).result).toContain("+ C");
+    }
+    expect(visualInputParameters("∫ (a*x+b) dx")).toEqual(["a", "b"]);
+    const integral = resolveVisualInput("∫ (a*x+b) dx", scope);
+    expect(compileFunction(integral)(2)).toBe(10);
+    const derivative = prepareWorkspaceVisual("d/dx (a*x^2)", scope);
+    expect(derivative.operation).toBe("derivative");
+    expect(derivative.parameters).toEqual(["a"]);
+    expect(compileFunction(derivative.expressions[0])(2, scope)).toBe(12);
+    expect(analyze(resolveVisualInput("d/dx (a*x^2)", scope)).kind).toBe("مشتقة");
+    expect(() => prepareWorkspaceVisual("∫ import(1) dx", scope)).toThrow();
+    expect(() => prepareWorkspaceVisual("∫ (3)", scope)).toThrow();
+  });
   it("automatically represents conics, vertical lines, vectors, matrices and geometric inputs", () => {
     const circle = prepareWorkspaceVisual("x^2+y^2=9", scope);
     expect(circle.segments.length).toBeGreaterThan(100);
