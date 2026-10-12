@@ -1,6 +1,7 @@
 import {
   analyze,
   coefficients,
+  compileFunction,
   fmt,
   normalize,
   safeParse,
@@ -9,6 +10,7 @@ import {
 import type { Step } from "./math";
 import { topics } from "../content/knowledge";
 import { prepareWorkspaceVisual } from "./visual";
+import { explainDerivative, explainIntegral, piLabel } from "./calculusSteps";
 import { derivative, isComplex, parse } from "mathjs";
 import type { FunctionNode } from "mathjs";
 
@@ -21,6 +23,7 @@ export type LawAttempt = Verdict & {
   preview: string;
   steps: (Step & { visualExpression?: string })[];
   purpose: "solve" | "transform" | "derivative" | "integral" | "measure";
+  signNotes?: string[];
 };
 export const learningLaws = [
   ...topics.map((topic) => ({
@@ -47,6 +50,20 @@ export const learningLaws = [
     formula: "c^2=a^2+b^2-2ab\\cos\\theta",
     condition:
       "ضلعان معلومان والزاوية المحصورة بينهما؛ يصلح للمثلث القائم وغير القائم.",
+  },
+  {
+    id: "partial-x",
+    title: "المشتقة الجزئية بالنسبة إلى x",
+    formula: "\\frac{\\partial f}{\\partial x}",
+    condition:
+      "دالة في متغيرين x وy؛ نعامل y كثابت ونشتق بالنسبة إلى x، فنحصل على ميل مقطع السطح الموازي لمحور x.",
+  },
+  {
+    id: "partial-y",
+    title: "المشتقة الجزئية بالنسبة إلى y",
+    formula: "\\frac{\\partial f}{\\partial y}",
+    condition:
+      "دالة في متغيرين x وy؛ نعامل x كثابت ونشتق بالنسبة إلى y، فنحصل على ميل مقطع السطح الموازي لمحور y.",
   },
 ];
 
@@ -569,25 +586,52 @@ export function tryLaw(source: string, lawId: string): LawAttempt {
         "العملية الرمزية تحفظ التعبير ومجموعة الحلول على المجال الأصلي. تطابق المنحنيين يوضح التكافؤ، ولا يعني أن كل الجذور استُخرجت.",
       );
     }
-    if (["derivative", "integral"].includes(lawId)) {
-      const expression = normalize(source).replace(/^y\s*=\s*/, "");
+    if (["derivative", "integral", "partial-x", "partial-y"].includes(lawId)) {
+      const partialLaw = lawId.startsWith("partial");
+      const expression = normalize(source).replace(
+        partialLaw ? /^z\s*=\s*/ : /^y\s*=\s*/,
+        "",
+      );
       if (expression.includes("="))
         return reject(
-          "الاشتقاق والتكامل هنا يُطبَّقان على دالة، لا يحلان المعادلة ولا يحفظان مجموعة جذورها. اكتب الدالة المراد دراستها.",
+          partialLaw
+            ? "الاشتقاق الجزئي هنا يُطبَّق على دالة مثل z = f(x,y)، لا على معادلة ضمنية أو معادلة مطلوب حلها."
+            : "الاشتقاق والتكامل هنا يُطبَّقان على دالة، لا يحلان المعادلة ولا يحفظان مجموعة جذورها. اكتب الدالة المراد دراستها.",
         );
-      const result = symbolic(expression, lawId as "derivative" | "integral", [
-        "x",
-      ]);
-      const reason =
-        lawId === "derivative"
+      const twoVariables = /\by\b/.test(expression);
+      if (!partialLaw && twoVariables)
+        return reject(
+          `الدالة تعتمد على x وy معًا؛ ${lawId === "derivative" ? "المشتقة العادية d/dx هنا غير محددة" : "التكامل أحادي المتغير هنا غير محدد"} دون بيان المتغير الذي يبقى ثابتًا. استخدم المشتقة الجزئية ∂/∂x أو ∂/∂y من المكتبة.`,
+        );
+      if (partialLaw && !twoVariables)
+        return reject(
+          `الدالة في متغير واحد x؛ ${lawId === "partial-y" ? "مشتقتها الجزئية بالنسبة إلى y صفر لأن y غير موجود، وهذا لا يصف تغيرها." : "لا يوجد متغير آخر يُثبَّت."} القانون المناسب هو المشتقة العادية d/dx.`,
+        );
+      const variable = lawId === "partial-y" ? "y" : "x";
+      const explained =
+        lawId === "integral"
+          ? explainIntegral(expression)
+          : explainDerivative(expression, variable);
+      const reason = partialLaw
+        ? `نشتق بالنسبة إلى ${variable} ونعامل ${variable === "x" ? "y" : "x"} كثابت. على السطح z = f(x,y) يمثل الناتج ميل المقطع الموازي لمحور ${variable}.`
+        : lawId === "derivative"
           ? "نحسب معدل تغير الدالة حيث تكون قابلة للاشتقاق؛ منحنى المشتقة والمماس يوضحان تغير الميل، وليس حل المعادلة الأصلية."
           : "نحسب دالة أصلية ونضيف C. الرسم يعرض C=0 ومستطيلات لمساحة موقعة تقريبية؛ الاشتقاق يعيد الدالة الأصلية حيث يكون معرفًا.";
-      return make(
-        result + (lawId === "integral" ? " + C" : ""),
-        result,
-        reason,
-        lawId as "derivative" | "integral",
+      const applied = make(
+        explained.display,
+        explained.result,
+        explained.verified
+          ? reason
+          : `${reason} لم يكتمل التحقق العددي من الناتج؛ راجعه قبل اعتماده.`,
+        lawId === "integral" ? "integral" : "derivative",
       );
+      applied.steps = explained.steps.map((step, index, all) =>
+        index === all.length - 1
+          ? { ...step, visualExpression: explained.result }
+          : step,
+      );
+      applied.signNotes = explained.signNotes;
+      return applied;
     }
     if (lawId === "pythagoras")
       return reject(
@@ -604,6 +648,182 @@ export function tryLaw(source: string, lawId: string): LawAttempt {
       null,
     );
   }
+}
+
+function compareAnswer(
+  expected: string,
+  answer: string,
+  attempt: LawAttempt,
+  kind: "derivative" | "integral",
+): Verdict {
+  let expectedValue: ReturnType<typeof compileFunction>,
+    answerValue: ReturnType<typeof compileFunction>;
+  try {
+    expectedValue = compileFunction(expected);
+    answerValue = compileFunction(answer);
+  } catch {
+    return {
+      valid: null,
+      message: "تعذر قراءة الإجابة؛ اكتبها بدلالة x (وy في الاشتقاق الجزئي).",
+    };
+  }
+  const scope = { y: 0.65, a: 1.4, b: 0.6, c: -0.45 };
+  let agreements = 0,
+    negated = true,
+    counterexample: { x: number; expected: number; answer: number } | null =
+      null;
+  for (const x of [-2.7, -1.9, -1.1, -0.4, 0.3, 0.8, 1.3, 2.2, 3.1]) {
+    const correct = expectedValue(x, scope),
+      given = answerValue(x, scope);
+    if (!Number.isFinite(correct) || !Number.isFinite(given)) continue;
+    const tolerance = 1e-6 * Math.max(1, Math.abs(correct));
+    if (Math.abs(correct + given) > tolerance) negated = false;
+    if (Math.abs(correct - given) <= tolerance) agreements += 1;
+    else counterexample ??= { x, expected: correct, answer: given };
+  }
+  const subject = kind === "integral" ? "مشتقة إجابتك" : "إجابتك";
+  const reference =
+    kind === "integral" ? "الدالة تحت التكامل" : "المشتقة الصحيحة";
+  if (counterexample) {
+    const where = `عند x = ${piLabel(counterexample.x)}${/\by\b/.test(expected) ? " وy = 0.65" : ""} تعطي ${subject} ${fmt(counterexample.answer)}، بينما ${reference} ${fmt(counterexample.expected)}.`;
+    return {
+      valid: false,
+      message: negated
+        ? `الإشارة معكوسة: ${where} ${attempt.signNotes?.[0] ?? (kind === "integral" ? "اشتقاق الدالة الأصلية يجب أن يعيد الدالة تحت التكامل بالإشارة نفسها." : "قارن إشارة إجابتك بإشارة ميل المنحنى.")}`
+        : `الإجابة غير صحيحة: ${where} هذه نقطة مضادة تكفي لنفي التكافؤ.${kind === "integral" ? " اشتقاق الدالة الأصلية يجب أن يعيد الدالة تحت التكامل." : ""}`,
+    };
+  }
+  return agreements >= 5
+    ? {
+        valid: null,
+        message: `${subject} تطابق ${reference} عند كل النقاط المفحوصة؛ يبدو أنها صيغة مكافئة، لكن المحرك لم يثبت التكافؤ رمزيًا.`,
+      }
+    : {
+        valid: null,
+        message:
+          "لم تتوفر نقاط كافية معرّفة للمقارنة؛ لا يمكن الحكم على الإجابة تلقائيًا.",
+      };
+}
+
+const candidateLaws = [
+  "balance",
+  "quadratic",
+  "factor",
+  "difference",
+  "derivative",
+  "integral",
+  "partial-x",
+  "partial-y",
+  "pythagoras",
+  "cosine",
+  "triangle",
+  "circle",
+  "vectors",
+  "matrix",
+];
+
+/** Laws whose conditions are verified for this exact problem; several may be valid at once. */
+export function suggestLaws(source: string, exclude?: string) {
+  const equation = normalize(source)
+    .replace(/^[yz]\s*=\s*/, "")
+    .includes("=");
+  return candidateLaws
+    .filter((id) => id !== exclude)
+    .map((id) => tryLaw(source, id))
+    .filter(
+      (attempt) =>
+        attempt.valid === true &&
+        (equation
+          ? attempt.purpose === "solve" ||
+            (attempt.lawId === "factor" && /\)\s*\*?\s*\(/.test(attempt.output))
+          : attempt.purpose !== "solve" && attempt.purpose !== "transform"),
+    );
+}
+
+export type Diagnosis = {
+  category:
+    | "law-unsuitable"
+    | "application-error"
+    | "correct"
+    | "applicable"
+    | "unverified"
+    | "incomplete";
+  title: string;
+  explanation: string;
+  alternatives: { lawId: string; title: string; message: string }[];
+};
+
+export function diagnoseSolution(
+  source: string,
+  attempt: LawAttempt | undefined,
+  steps: Verdict[],
+  final: Verdict,
+  fitting: LawAttempt[] = suggestLaws(source, attempt?.lawId),
+): Diagnosis {
+  const goal = (item: LawAttempt) =>
+    item.lawId === "factor" ? "solve" : item.purpose;
+  const alternatives = fitting
+    .filter((item) => !attempt?.valid || goal(item) === goal(attempt))
+    .slice(0, 4)
+    .map(({ lawId, title, message }) => ({ lawId, title, message }));
+  const names = alternatives.map((item) => `«${item.title}»`).join("، ");
+  const firstError = steps.findIndex((step) => step.valid === false);
+  if (attempt && attempt.valid === false)
+    return {
+      category: "law-unsuitable",
+      title: `«${attempt.title}» غير مناسب لهذه المسألة`,
+      explanation: `${attempt.message} المشكلة في اختيار القانون، وليست خطأً حسابيًا: شرط تطبيقه غير متحقق في المسألة الحالية.${alternatives.length ? ` القانون المناسب: «${alternatives[0].title}»؛ ${alternatives[0].message}` : " لا يوجد في المكتبة تطبيق آلي بديل متحقق لهذه المسألة."}`,
+      alternatives,
+    };
+  if (firstError !== -1)
+    return {
+      category: "application-error",
+      title: attempt?.valid
+        ? `«${attempt.title}» مناسب، لكن تطبيقه فيه خطأ`
+        : `خطأ في الخطوة ${firstError + 1}`,
+      explanation: `بدأ الخطأ في خطوتك ${firstError + 1}: ${steps[firstError].message}${attempt?.valid ? " شروط القانون متحققة، فلا داعي لتغييره؛ صحّح هذه الخطوة وتابع بالقانون نفسه." : ""}`,
+      alternatives,
+    };
+  if (final.valid === false)
+    return {
+      category: "application-error",
+      title: attempt?.valid
+        ? `«${attempt.title}» مناسب، لكن الناتج النهائي خاطئ`
+        : "الناتج النهائي غير صحيح",
+      explanation: `${final.message}${attempt?.valid ? " القانون نفسه صالح هنا؛ الخطأ في التطبيق، فراجع التعويض والإشارات." : ""}`,
+      alternatives,
+    };
+  if (final.valid === true)
+    return {
+      category: "correct",
+      title: "الحل صحيح",
+      explanation: alternatives.length
+        ? `${final.message} توجد طرق صحيحة أخرى لهذه المسألة: ${names}. اختلاف الطريقة لا يعني الخطأ؛ كل طريقة تحققت شروطها توصل إلى النتيجة نفسها.`
+        : final.message,
+      alternatives,
+    };
+  if (attempt?.valid === true)
+    return {
+      category: "applicable",
+      title: `«${attempt.title}» مناسب لهذه المسألة`,
+      explanation: `${attempt.message} أدخل خطواتك أو نتيجتك النهائية ليراجع المستشار تطبيقك.${alternatives.length ? ` يمكن الحل أيضًا بـ ${names}.` : ""}`,
+      alternatives,
+    };
+  if (attempt)
+    return {
+      category: "unverified",
+      title: `تعذر الحكم على «${attempt.title}» تلقائيًا`,
+      explanation: `${attempt.message}${alternatives.length ? ` القوانين التي تحققت شروطها هنا: ${names}.` : ""}`,
+      alternatives,
+    };
+  return {
+    category: "incomplete",
+    title: "اختر قانونًا أو أدخل خطوة لمراجعتها",
+    explanation: alternatives.length
+      ? `القوانين التي تحققت شروطها على المسألة الحالية: ${names}.`
+      : "لم يجد المحرك قانونًا مدعومًا تتحقق شروطه آليًا على هذه المسألة.",
+    alternatives,
+  };
 }
 
 export function verifyFinal(
@@ -682,10 +902,11 @@ export function verifyFinal(
           message:
             "هذه صيغة غير خطية لثابت التكامل؛ يلزم التحقق من مجال الثابت وهل تولّد جميع الدوال الأصلية. اختلاف كتابتها عن + C وحده لا يثبت الخطأ.",
         };
-      return verifyTransition(
-        normalize(source).replace(/^y\s*=\s*/, ""),
-        differentiated,
-      );
+      const integrand = normalize(source).replace(/^y\s*=\s*/, "");
+      const verdict = verifyTransition(integrand, differentiated);
+      return verdict.valid !== null
+        ? verdict
+        : compareAnswer(integrand, differentiated, attempt, "integral");
     } catch {
       return {
         valid: null,
@@ -699,7 +920,10 @@ export function verifyFinal(
     (attempt.purpose === "derivative" ||
       (attempt.purpose === "transform" && !source.includes("=")))
   ) {
-    return verifyTransition(attempt.preview, answer);
+    const verdict = verifyTransition(attempt.preview, answer);
+    return verdict.valid !== null || attempt.purpose !== "derivative"
+      ? verdict
+      : compareAnswer(attempt.preview, answer, attempt, "derivative");
   }
   const analysis = analyze(source);
   if (!source.includes("=") || !analysis.supported)

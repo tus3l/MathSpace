@@ -33,6 +33,7 @@ import { Formula, MathInput, Slider, Why } from "./Controls";
 import { MathTools } from "./MathTools";
 import { LearningPanel } from "./LearningPanel";
 import { ProofNotebook } from "./ProofNotebook";
+import { SignSummary } from "./SignSummary";
 
 function initialVisual(expression: string): WorkspaceVisual {
   try {
@@ -154,7 +155,24 @@ export function Workspace({
             {
               expression: currentExpression,
               color: "#7770ce",
-              label: visual.expressions.length === 2 ? "فرق الطرفين" : "f(x)",
+              label:
+                visual.expressions.length === 2
+                  ? "فرق الطرفين"
+                  : visual.operation === "derivative"
+                    ? "بعد: f′(x)"
+                    : visual.operation === "integral"
+                      ? "بعد: F(x)، C=0"
+                      : "f(x)",
+            },
+          ]
+        : []),
+      ...(visual.original
+        ? [
+            {
+              expression: visual.original,
+              color: "#e28e4e",
+              label: "قبل: f(x)",
+              dashed: true,
             },
           ]
         : []),
@@ -180,7 +198,15 @@ export function Workspace({
         label: expression,
       })),
     ],
-    [currentExpression, visual.expressions.length, activePreview, mode, extra],
+    [
+      currentExpression,
+      visual.expressions.length,
+      visual.operation,
+      visual.original,
+      activePreview,
+      mode,
+      extra,
+    ],
   );
   const points = currentAnalysis.roots.map((root) => ({
     x: root,
@@ -559,22 +585,52 @@ export function Workspace({
             scope={activeScope}
             onInspect={setInspector}
             tangent={
-              activePreview?.purpose === "derivative" && currentExpression
-                ? { x: probeX, expression: currentExpression }
-                : undefined
+              visual.operation === "derivative" && visual.original
+                ? { x: probeX, expression: visual.original }
+                : activePreview?.purpose === "derivative" && currentExpression
+                  ? { x: probeX, expression: currentExpression }
+                  : undefined
             }
             rectangles={
-              activePreview?.purpose === "integral" && currentExpression
+              visual.operation === "integral" && visual.original
                 ? {
                     count: 32,
                     from: 0,
                     to: probeX || 2,
-                    expression: currentExpression,
+                    expression: visual.original,
                   }
-                : undefined
+                : activePreview?.purpose === "integral" && currentExpression
+                  ? {
+                      count: 32,
+                      from: 0,
+                      to: probeX || 2,
+                      expression: currentExpression,
+                    }
+                  : undefined
             }
           />
           <p className="visual-caption">{visual.description}</p>
+          {visual.operation && visual.original && (
+            <div className="live-explanation">
+              <Lightbulb size={18} />
+              <p>
+                {visual.operation === "derivative"
+                  ? `المنحنى المتقطع هو f قبل الاشتقاق، والمتصل f′ بعده. ميل المماس البرتقالي على f عند x = ${fmt(probeX)} يساوي ارتفاع f′ عند x نفسها. حرّك النقطة أو شغّل الحركة: حيث يصعد f يقع f′ فوق المحور، وحيث يهبط يقع تحته.`
+                  : `المنحنى المتقطع هو f، والمتصل دالة أصلية F (C = 0). المستطيلات تجمع المساحة الموقّعة تحت f من 0 إلى x = ${fmt(probeX || 2)}؛ هذه المساحة تساوي F(x) − F(0). حيث f موجبة تتزايد F، والمساحة تحت المحور تُحسب سالبة.`}
+              </p>
+            </div>
+          )}
+          {visual.operation && visual.original && currentExpression && (
+            <SignSummary
+              rate={
+                visual.operation === "derivative"
+                  ? currentExpression
+                  : visual.original
+              }
+              scope={activeScope}
+              subject={visual.operation === "derivative" ? "f" : "F"}
+            />
+          )}
           {activePreview && (
             <div className="live-explanation">
               <Lightbulb size={18} />

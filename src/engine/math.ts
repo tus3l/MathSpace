@@ -5,6 +5,7 @@ import { solveQuadratic } from "./calculation";
 import { recommendQuadratic } from "./advisor";
 import { explainStep } from "./explanation";
 import type { ExplainedStep } from "./explanation";
+import { explainCalculus, explainDerivative } from "./calculusSteps";
 
 export type Step = ExplainedStep;
 export type Analysis = {
@@ -55,7 +56,10 @@ export function normalize(input: string) {
     .replace(/٫/g, ".")
     .replace(/\\(?:sin|cos|tan|log|ln|exp|sqrt|pi)\b/g, (name) => name.slice(1))
     .replace(/\\int\b/g, "∫")
-    .replace(/\b(?:sin|cos|tan|asin|acos|atan|sqrt|log|log10|ln|exp|abs)\b(?=\s*\()/gi, (name) => name.toLowerCase())
+    .replace(
+      /\b(?:sin|cos|tan|asin|acos|atan|sqrt|log|log10|ln|exp|abs)\b(?=\s*\()/gi,
+      (name) => name.toLowerCase(),
+    )
     .replace(/(?:جيب التمام|جتا|كوساين)(?=\s*\()/g, "cos")
     .replace(/(?:جيب|جا|ساين)(?=\s*\()/g, "sin")
     .replace(/(?:الظل|ظل|ظا|تان)(?=\s*\()/g, "tan")
@@ -71,14 +75,22 @@ export function normalize(input: string) {
 }
 export function mathRequest(input: string) {
   const normalized = normalize(input);
-  const integral = normalized.match(/^(?:integral|integrate|int)\((.+)\)$/i)
-    || normalized.match(/^∫\s*(.+?)\s*d\s*x$/);
+  const integral =
+    normalized.match(/^(?:integral|integrate|int)\((.+)\)$/i) ||
+    normalized.match(/^∫\s*(.+?)\s*d\s*x$/);
   if (integral)
-    return { expression: integral[1].replace(/,\s*x\s*$/, ""), operation: "integral" as const };
-  const derived = normalized.match(/^(?:derivative|diff)\((.+)\)$/i)
-    || normalized.match(/^d\s*\/\s*d\s*x\s*(.+)$/);
+    return {
+      expression: integral[1].replace(/,\s*x\s*$/, ""),
+      operation: "integral" as const,
+    };
+  const derived =
+    normalized.match(/^(?:derivative|diff)\((.+)\)$/i) ||
+    normalized.match(/^d\s*\/\s*d\s*x\s*(.+)$/);
   if (derived)
-    return { expression: derived[1].replace(/,\s*x\s*$/, ""), operation: "derivative" as const };
+    return {
+      expression: derived[1].replace(/,\s*x\s*$/, ""),
+      operation: "derivative" as const,
+    };
   return { expression: normalized, operation: null };
 }
 export function safeParse(
@@ -131,7 +143,9 @@ export function safeParse(
 }
 export function compileFunction(input: string) {
   const request = mathRequest(input);
-  const expression = request.operation ? symbolic(request.expression, request.operation) : request.expression;
+  const expression = request.operation
+    ? symbolic(request.expression, request.operation)
+    : request.expression;
   const code = safeParse(expression).compile();
   return (x: number, scope: Record<string, number> = {}) => {
     try {
@@ -223,19 +237,21 @@ export function analyze(input: string): Analysis {
     const request = mathRequest(input);
     if (request.operation) {
       safeParse(request.expression, ["x"]);
-      const calculated = symbolic(request.expression, request.operation);
-      safeParse(calculated, ["x"]);
+      const explained = explainCalculus(request.expression, request.operation);
+      safeParse(explained.result, ["x"]);
       const integral = request.operation === "integral";
       base.kind = integral ? "تكامل غير محدد" : "مشتقة";
       base.method = integral ? "إيجاد دالة أصلية" : "قواعد الاشتقاق";
-      base.goal = integral ? "إيجاد دالة مشتقتها تساوي التعبير الأصلي" : "حساب معدل التغير";
+      base.goal = integral
+        ? "إيجاد دالة مشتقتها تساوي التعبير الأصلي"
+        : "حساب معدل التغير";
       base.methodReason = integral
         ? "نحسب دالة أصلية بالنسبة إلى x ونضيف ثابت التكامل C. الرسم يعرض الدالة الأصلية عند C = 0، ويُراعى مجال الدالة الأصلية."
         : "نحسب المشتقة بالنسبة إلى x. الرسم يعرض دالة المشتقة حيث تكون معرفة.";
-      base.graph = calculated;
-      base.result = calculated + (integral ? " + C" : "");
-      base.steps = [step(normalized, base.method, base.result, base.methodReason,
-        integral ? "التكامل غير المحدد" : "قواعد الاشتقاق")];
+      base.graph = explained.result;
+      base.result = explained.display;
+      base.steps = explained.steps;
+      base.hints = explained.signNotes;
       base.related = [integral ? "integral" : "derivative", "functions"];
       return base;
     }
@@ -270,7 +286,8 @@ export function analyze(input: string): Analysis {
       base.method = "الرسم ومعدل التغير";
       base.methodReason =
         "الرسم يربط كل قيمة للمتغير x بقيمة الدالة، والمشتقة تصف ميل المنحنى محليًا.";
-      const derived = derivative(expression, "x").toString();
+      const explained = explainDerivative(expression);
+      const derived = explained.result;
       const simplified = simplify(expression).toString();
       base.steps = [
         step(
@@ -280,13 +297,7 @@ export function analyze(input: string): Analysis {
           "نكتب تعبيرًا مكافئًا دون تغيير قيم الدالة حيث تكون معرفة.",
           "التبسيط",
         ),
-        step(
-          simplified,
-          "حساب المشتقة",
-          derived,
-          "نطبق قواعد الاشتقاق على تركيب الدالة للحصول على معدل التغير اللحظي.",
-          "قواعد الاشتقاق",
-        ),
+        ...explained.steps,
       ];
       base.result = `f'(x) = ${derived}`;
       base.related = ["functions", "derivative"];

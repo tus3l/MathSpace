@@ -11,8 +11,10 @@ import {
 } from "lucide-react";
 import { analyze } from "../engine/math";
 import {
+  diagnoseSolution,
   learningLaws,
   lawStepVisual,
+  suggestLaws,
   tryLaw,
   verifyFinal,
   verifyTransition,
@@ -99,6 +101,34 @@ export function LearningPanel({
     !uncertain &&
     (!attempt || attempt.valid === true);
   const lastAttempt = attempts.at(-1);
+  const fitting = useMemo(
+    () =>
+      lastAttempt?.valid === false && lastAttempt.source === source
+        ? suggestLaws(source, lastAttempt.lawId)
+        : [],
+    [lastAttempt, source],
+  );
+  const advisorLaws = useMemo(
+    () => (panel === "advisor" ? suggestLaws(source, attempt?.lawId) : []),
+    [panel, source, attempt?.lawId],
+  );
+  const diagnosis =
+    panel === "advisor"
+      ? diagnoseSolution(source, attempt, currentSteps, final, advisorLaws)
+      : null;
+  function apply(id: string) {
+    const next = tryLaw(source, id);
+    setLawId(id);
+    setAttempts([...attempts, next]);
+    setAnswer({ source, value: "" });
+    onClearPreview();
+    if (next.valid && next.preview)
+      onPreview(
+        next.preview,
+        next.purpose,
+        `${next.title}: ${next.output}. ${next.message}`,
+      );
+  }
   const filtered = learningLaws.filter((law) =>
     `${law.title} ${law.condition}`.includes(search.trim()),
   );
@@ -194,21 +224,7 @@ export function LearningPanel({
               {!filtered.length && <p>لا توجد نتائج مطابقة.</p>}
               <Formula value={selectedLaw.formula} block />
               <p>{selectedLaw.condition}</p>
-              <button
-                className="button primary"
-                onClick={() => {
-                  const next = tryLaw(source, lawId);
-                  setAttempts([...attempts, next]);
-                  setAnswer({ source, value: "" });
-                  onClearPreview();
-                  if (next.valid && next.preview)
-                    onPreview(
-                      next.preview,
-                      next.purpose,
-                      `${next.title}: ${next.output}. ${next.message}`,
-                    );
-                }}
-              >
+              <button className="button primary" onClick={() => apply(lawId)}>
                 <Play size={16} /> تجربة القانون
               </button>
               {lastAttempt && (
@@ -228,6 +244,22 @@ export function LearningPanel({
                   <p>{lastAttempt.message}</p>
                   {lastAttempt.output && (
                     <code dir="ltr">{lastAttempt.output}</code>
+                  )}
+                  {lastAttempt.signNotes &&
+                    lastAttempt.signNotes.length > 0 && (
+                      <details>
+                        <summary>لماذا هذه الإشارة؟</summary>
+                        {lastAttempt.signNotes.map((note) => (
+                          <p key={note}>{note}</p>
+                        ))}
+                      </details>
+                    )}
+                  {fitting.length > 0 && (
+                    <AlternativeLaws
+                      title="قوانين تحققت شروطها في هذه المسألة"
+                      laws={fitting}
+                      onApply={apply}
+                    />
                   )}
                 </div>
               )}
@@ -351,6 +383,35 @@ export function LearningPanel({
           )}
           {panel === "advisor" && (
             <>
+              {diagnosis && (
+                <div
+                  className={`learning-verdict diagnosis ${["law-unsuitable", "application-error"].includes(diagnosis.category) ? "incorrect" : ""}`}
+                  role="status"
+                  aria-label="تشخيص المستشار"
+                >
+                  <strong>{diagnosis.title}</strong>
+                  <p>{diagnosis.explanation}</p>
+                  {attempt?.signNotes && attempt.signNotes.length > 0 && (
+                    <details>
+                      <summary>لماذا هذه الإشارة؟</summary>
+                      {attempt.signNotes.map((note) => (
+                        <p key={note}>{note}</p>
+                      ))}
+                    </details>
+                  )}
+                  {diagnosis.alternatives.length > 0 && (
+                    <AlternativeLaws
+                      title={
+                        diagnosis.category === "correct"
+                          ? "طرق صحيحة أخرى"
+                          : "قوانين تحققت شروطها هنا"
+                      }
+                      laws={diagnosis.alternatives}
+                      onApply={apply}
+                    />
+                  )}
+                </div>
+              )}
               {customReview && (
                 <div
                   className={`learning-verdict ${customReview.verdict.valid === false ? "incorrect" : ""}`}
@@ -504,5 +565,34 @@ export function LearningPanel({
         </div>
       )}
     </section>
+  );
+}
+
+function AlternativeLaws({
+  title,
+  laws,
+  onApply,
+}: {
+  title: string;
+  laws: { lawId: string; title: string; message: string }[];
+  onApply: (id: string) => void;
+}) {
+  return (
+    <div className="alternative-laws">
+      <small>{title}</small>
+      {laws.map((law) => (
+        <div key={law.lawId} className="alternative-law">
+          <p>
+            <strong>{law.title}</strong> — {law.message}
+          </p>
+          <button
+            className="button secondary"
+            onClick={() => onApply(law.lawId)}
+          >
+            <Play size={14} /> طبّقه على المسألة نفسها
+          </button>
+        </div>
+      ))}
+    </div>
   );
 }

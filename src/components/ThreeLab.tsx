@@ -2,11 +2,24 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { RotateCcw } from "lucide-react";
-import { fmt } from "../engine/math";
+import { compileFunction, fmt, mathRequest, normalize } from "../engine/math";
 import { sampleSurface, surfacePresets } from "../engine/surfaces";
+import { explainDerivative } from "../engine/calculusSteps";
 import { MathInput, Slider, Why } from "./Controls";
 import { Insight, LabHeader } from "./CoreLabs";
+import { LearningPanel } from "./LearningPanel";
 import { MathTools } from "./MathTools";
+
+function traceSegments(points: [number, number, number][]) {
+  const positions: number[] = [];
+  for (let index = 1; index < points.length; index++) {
+    const previous = points[index - 1],
+      current = points[index];
+    if ([...previous, ...current].every(Number.isFinite))
+      positions.push(...previous, ...current);
+  }
+  return new THREE.Float32BufferAttribute(positions, 3);
+}
 
 function frameSurface(
   camera: THREE.PerspectiveCamera,
@@ -18,9 +31,14 @@ function frameSurface(
   if (!bounds || bounds.radius <= 0 || !Number.isFinite(bounds.radius)) return;
   const direction = camera.position.clone().sub(controls.target).normalize();
   const vertical = THREE.MathUtils.degToRad(camera.fov) / 2;
-  const angle = Math.min(vertical, Math.atan(Math.tan(vertical) * camera.aspect));
+  const angle = Math.min(
+    vertical,
+    Math.atan(Math.tan(vertical) * camera.aspect),
+  );
   controls.target.copy(bounds.center);
-  camera.position.copy(bounds.center).addScaledVector(direction, (bounds.radius / Math.sin(angle)) * 1.1);
+  camera.position
+    .copy(bounds.center)
+    .addScaledVector(direction, (bounds.radius / Math.sin(angle)) * 1.1);
   controls.update();
 }
 
@@ -34,6 +52,8 @@ export default function ThreeLab() {
     controls: OrbitControls;
     camera: THREE.PerspectiveCamera;
     section: THREE.LineSegments;
+    traces: THREE.LineSegments[];
+    probe: THREE.Mesh;
   } | null>(null);
   const [shape, setShape] = useState("cube"),
     [dimension, setDimension] = useState(2),
@@ -45,6 +65,45 @@ export default function ThreeLab() {
   const [scope, setScope] = useState({ a: 2, b: 1.5, c: 2 });
   const [domain, setDomain] = useState([0, 2 * Math.PI, 0, 2 * Math.PI]);
   const [showSection, setShowSection] = useState(false);
+  const [probe, setProbe] = useState({ x: 1, y: -1 });
+  const [showTraces, setShowTraces] = useState(true);
+  const explicit = useMemo(() => {
+    const expression = normalize(surface);
+    const sides = expression.split("=");
+    const body =
+      sides.length === 1
+        ? expression
+        : sides.length === 2 && sides[0].trim() === "z"
+          ? sides[1]
+          : "";
+    if (!body || body.includes(";") || /\bz\b/.test(body)) return null;
+    if (mathRequest(body).operation) return null;
+    try {
+      return {
+        body,
+        dx: explainDerivative(body, "x"),
+        dy: explainDerivative(body, "y"),
+      };
+    } catch {
+      return null;
+    }
+  }, [surface]);
+  const slope = useMemo(() => {
+    if (!explicit) return null;
+    const at = (expression: string, x: number, y: number) => {
+      try {
+        return compileFunction(expression)(x, { ...scope, y });
+      } catch {
+        return NaN;
+      }
+    };
+    return {
+      at,
+      z: at(explicit.body, probe.x, probe.y),
+      fx: at(explicit.dx.result, probe.x, probe.y),
+      fy: at(explicit.dy.result, probe.x, probe.y),
+    };
+  }, [explicit, scope, probe]);
   const sampled = useMemo(() => {
     try {
       return { data: sampleSurface(surface, scope, domain), error: "" };
@@ -124,7 +183,37 @@ export default function ThreeLab() {
     );
     section.renderOrder = 2;
     scene.add(section);
-    sceneRef.current = { scene, mesh, camera, controls, section };
+    const traces = ["#e28e4e", "#249b8d", "#e28e4e", "#249b8d"].map(
+      (color, index) => {
+        const line = new THREE.LineSegments(
+          new THREE.BufferGeometry(),
+          new THREE.LineBasicMaterial({
+            color,
+            depthTest: index < 2,
+            transparent: index < 2,
+            opacity: index < 2 ? 0.9 : 1,
+          }),
+        );
+        line.renderOrder = 3;
+        scene.add(line);
+        return line;
+      },
+    );
+    const probe = new THREE.Mesh(
+      new THREE.SphereGeometry(0.14, 20, 14),
+      new THREE.MeshBasicMaterial({ color: "#d8687e", depthTest: false }),
+    );
+    probe.renderOrder = 4;
+    scene.add(probe);
+    sceneRef.current = {
+      scene,
+      mesh,
+      camera,
+      controls,
+      section,
+      traces,
+      probe,
+    };
     const observer = new ResizeObserver(() => {
       const { width, height } = mount.getBoundingClientRect();
       renderer.setSize(width, height);
@@ -259,6 +348,35 @@ export default function ThreeLab() {
     if (sceneRef.current)
       sceneRef.current.section.visible = shape === "surface" && showSection;
   }, [shape, showSection]);
+  useEffect(() => {
+    const state = sceneRef.current;
+    if (!state) return;
+    const visible =
+      shape === "surface" &&
+      showTraces &&
+      !!explicit &&
+      !!slope &&
+      Number.isFinite(slope.z) &&
+      Math.abs(slope.z) <= 12;
+    state.probe.visible = visible;
+    state.traces.forEach((line) => (line.visible = visible));
+    if (!visible || !explicit || !slope) return;
+    const clip = (z: number) => (Math.abs(z) <= 12 ? z : NaN);
+    const range = Array.from({ length: 161 }, (_, index) => -4 + index / 20);
+    const reach = Array.from({ length: 21 }, (_, index) => -1.2 + index * 0.12);
+    const shapes: [number, number, number][][] = [
+      range.map((x) => [x, probe.y, clip(slope.at(explicit.body, x, probe.y))]),
+      range.map((y) => [probe.x, y, clip(slope.at(explicit.body, probe.x, y))]),
+      reach.map((t) => [probe.x + t, probe.y, clip(slope.z + slope.fx * t)]),
+      reach.map((t) => [probe.x, probe.y + t, clip(slope.z + slope.fy * t)]),
+    ];
+    state.traces.forEach((line, index) => {
+      line.geometry.dispose();
+      line.geometry = new THREE.BufferGeometry();
+      line.geometry.setAttribute("position", traceSegments(shapes[index]));
+    });
+    state.probe.position.set(probe.x, probe.y, slope.z);
+  }, [shape, showTraces, explicit, slope, probe]);
   const volume =
     shape === "cube"
       ? dimension ** 3
@@ -335,7 +453,12 @@ export default function ThreeLab() {
                 if (state) {
                   state.camera.position.set(10, -12, 10);
                   state.controls.target.set(0, 0, 1);
-                  if (shape === "surface") frameSurface(state.camera, state.controls, state.mesh.geometry);
+                  if (shape === "surface")
+                    frameSurface(
+                      state.camera,
+                      state.controls,
+                      state.mesh.geometry,
+                    );
                   state.controls.update();
                 }
               }}
@@ -360,6 +483,69 @@ export default function ThreeLab() {
                 : `تغيير ${["sphere", "cylinder", "cone"].includes(shape) ? "نصف القطر" : "طول ضلع القاعدة"} يعيد حساب المجسم وحجمه ومساحته. الحجم يتناسب تكعيبيًا عند تكبير جميع الأبعاد بالنسبة نفسها، والمساحة تربيعيًا.`}
             </p>
           </Insight>
+          {shape === "surface" && explicit && slope && showTraces && (
+            <Insight title="المشتقات الجزئية على السطح">
+              <p>
+                النقطة الوردية عند ({fmt(probe.x)}, {fmt(probe.y)},{" "}
+                {fmt(slope.z)}). المنحنى البرتقالي هو مقطع السطح عند y ={" "}
+                {fmt(probe.y)}، ومماسه المستقيم ميله ∂f/∂x = {fmt(slope.fx)}.
+                المنحنى الأخضر هو المقطع عند x = {fmt(probe.x)}، ومماسه ميله
+                ∂f/∂y = {fmt(slope.fy)}. كل مشتقة جزئية ترى الحركة في اتجاه واحد
+                فقط مع تثبيت المتغير الآخر؛ لذلك قد يصعد السطح في اتجاه x ويهبط
+                في اتجاه y عند النقطة نفسها.
+              </p>
+            </Insight>
+          )}
+          {shape === "surface" && explicit && (
+            <section
+              className="calculus-steps"
+              aria-label="خطوات الاشتقاق الجزئي"
+            >
+              {[explicit.dx, explicit.dy].map((item) => (
+                <details key={item.variable} open={item.variable === "x"}>
+                  <summary dir="ltr">
+                    ∂f/∂{item.variable} = {item.display}
+                  </summary>
+                  <ol className="explained-steps">
+                    {item.steps.map((step, index) => (
+                      <li key={index}>
+                        <h4>{step.operation}</h4>
+                        <code dir="ltr">{step.after}</code>
+                        <span className="rule-label" dir="auto">
+                          {step.rule}
+                        </span>
+                        <p>{step.reason}</p>
+                      </li>
+                    ))}
+                  </ol>
+                </details>
+              ))}
+            </section>
+          )}
+          {shape === "surface" && (
+            <section aria-label="المكتبة والمستشار للسطح الحالي">
+              <div className="section-heading">
+                <h2>المكتبة والمستشار</h2>
+              </div>
+              <LearningPanel
+                source={explicit ? explicit.body : surface}
+                graphDescription={
+                  explicit
+                    ? "سطح ارتفاع z = f(x,y)؛ القوانين المناسبة هنا هي المشتقات الجزئية."
+                    : "سطح ضمني أو بارامتري؛ لا توجد في المكتبة قوانين متحقق منها آليًا لهذا النوع."
+                }
+                values={{ ...scope, x: probe.x, y: probe.y }}
+                activity={[]}
+                running={false}
+                showAnimation={false}
+                onPlay={() => {}}
+                onReset={() => {}}
+                onShowSteps={() => {}}
+                onClearPreview={() => {}}
+                onPreview={() => {}}
+              />
+            </section>
+          )}
         </section>
         <aside className="lab-properties">
           <h3>خصائص المجسم</h3>
@@ -445,6 +631,50 @@ export default function ThreeLab() {
                 />{" "}
                 المقطع في المستوى z = 0
               </label>
+              {explicit && (
+                <>
+                  <label className="field-label">
+                    <input
+                      type="checkbox"
+                      checked={showTraces}
+                      onChange={(event) => setShowTraces(event.target.checked)}
+                    />{" "}
+                    مقاطع المشتقات الجزئية عند نقطة
+                  </label>
+                  {showTraces && (
+                    <>
+                      <Slider
+                        label="x₀"
+                        min={-3.5}
+                        max={3.5}
+                        step={0.05}
+                        value={probe.x}
+                        onChange={(x) =>
+                          setProbe((previous) => ({ ...previous, x }))
+                        }
+                      />
+                      <Slider
+                        label="y₀"
+                        min={-3.5}
+                        max={3.5}
+                        step={0.05}
+                        value={probe.y}
+                        onChange={(y) =>
+                          setProbe((previous) => ({ ...previous, y }))
+                        }
+                      />
+                      <div className="metric">
+                        <span>∂f/∂x (المقطع البرتقالي)</span>
+                        <strong>{fmt(slope?.fx ?? NaN)}</strong>
+                      </div>
+                      <div className="metric">
+                        <span>∂f/∂y (المقطع الأخضر)</span>
+                        <strong>{fmt(slope?.fy ?? NaN)}</strong>
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
               {sampled.data?.kind === "parametric" &&
                 ["u", "v"].map((name, index) => (
                   <div key={name} className="field-label">

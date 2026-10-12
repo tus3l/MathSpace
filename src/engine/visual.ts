@@ -30,6 +30,7 @@ export type WorkspaceVisual = {
   kind: string;
   description: string;
   operation: "derivative" | "integral" | null;
+  original?: string;
 };
 
 export function resolveVisualInput(
@@ -52,9 +53,7 @@ export function resolveVisualInput(
         .toString(),
     )
     .join("=");
-  return request.operation
-    ? `${request.operation}(${expression})`
-    : expression;
+  return request.operation ? `${request.operation}(${expression})` : expression;
 }
 
 export function visualInputParameters(input: string): VisualParameter[] {
@@ -390,6 +389,7 @@ export function prepareVisualExpression(
     expressions,
     parameters: [...parameters],
     operation: request.operation,
+    ...(request.operation ? { original: sides[0] } : {}),
   };
 }
 

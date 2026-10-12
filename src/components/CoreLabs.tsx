@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import {
   Lightbulb,
-  MoveUpRight,
   RotateCcw,
   Check,
   ArrowLeft,
@@ -16,16 +15,7 @@ import { Graph } from "./Graph";
 import { LearningPanel } from "./LearningPanel";
 import { verifyTransition } from "../engine/learning";
 import type { Verdict } from "../engine/learning";
-import {
-  analyze,
-  checkStep,
-  compileFunction,
-  fmt,
-  normalize,
-  safeParse,
-  symbolic,
-} from "../engine/math";
-import { riemann } from "../engine/simulations";
+import { analyze, checkStep, fmt, normalize, safeParse } from "../engine/math";
 import { MathTools } from "./MathTools";
 import {
   prepareVisualExpression,
@@ -1518,278 +1508,6 @@ export function TrigLab({ complex = false }: { complex?: boolean }) {
     </>
   );
 }
-export function CalculusLab() {
-  const [mode, setMode] = useState("derivative"),
-    [input, setInput] = useState("x^2"),
-    [expression, setExpression] = useState("x^2"),
-    [error, setError] = useState("");
-  const [point, setPoint] = useState(1),
-    [delta, setDelta] = useState(1),
-    [count, setCount] = useState(8),
-    [from, setFrom] = useState(0),
-    [to, setTo] = useState(2);
-  const evaluate = compileFunction(expression),
-    value = evaluate(point),
-    nextValue = evaluate(point + delta),
-    secantSlope = (nextValue - value) / delta;
-  let derived = "",
-    primitive = "",
-    exact = NaN;
-  try {
-    derived = symbolic(expression, "derivative");
-    primitive = symbolic(expression, "integral");
-    const primitiveFn = compileFunction(primitive);
-    exact = Number.isFinite(riemann(evaluate, from, to, 8))
-      ? primitiveFn(to) - primitiveFn(from)
-      : NaN;
-  } catch {
-    /* Symbolic results are optional for the visual experiment. */
-  }
-  const approximation = riemann(evaluate, from, to, count);
-  const steps = ["بداية التجربة", "تقريب أول", "تقريب أدق", "اقتراب من الحد"];
-  const current =
-    mode === "integral"
-      ? count <= 8
-        ? 0
-        : count <= 24
-          ? 1
-          : count <= 64
-            ? 2
-            : 3
-      : delta >= 1
-        ? 0
-        : delta >= 0.3
-          ? 1
-          : delta >= 0.08
-            ? 2
-            : 3;
-  return (
-    <>
-      <LabHeader english="CALCULUS VISUALIZER" title="التغير والتراكم" />
-      <div className="workspace-navigation">
-        <div className="tabs">
-          {[
-            ["limits", "النهايات"],
-            ["derivative", "المشتقة"],
-            ["integral", "التكامل"],
-          ].map(([id, label]) => (
-            <button
-              key={id}
-              className={mode === id ? "active" : ""}
-              onClick={() => setMode(id)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="lab-layout">
-        <section className="lab-stage">
-          <form
-            className="inline-form stage-form calculus-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              try {
-                compileFunction(input);
-                setExpression(input);
-                setError("");
-              } catch {
-                setError("تعذر قراءة الدالة.");
-              }
-            }}
-          >
-            <span className="mono">f(x) =</span>
-            <MathInput
-              label="دالة التفاضل والتكامل"
-              value={input}
-              onChange={setInput}
-              variables={["x"]}
-            />
-            <button className="button primary">
-              رسم <MoveUpRight size={15} />
-            </button>
-          </form>
-          {error && <p className="error-message">{error}</p>}
-          <Graph
-            curves={[
-              { expression, color: "#7770ce", label: "f(x)" },
-              ...(mode === "derivative"
-                ? [
-                    {
-                      expression: `${value}+(${secantSlope})*(x-(${point}))`,
-                      color: "#249b8d",
-                      label: "Secant",
-                      dashed: true,
-                    },
-                  ]
-                : []),
-            ]}
-            points={
-              mode === "integral"
-                ? []
-                : mode === "limits"
-                  ? [
-                      {
-                        x: point - delta,
-                        y: evaluate(point - delta),
-                        color: "#249b8d",
-                        label: "Left",
-                      },
-                      {
-                        x: point + delta,
-                        y: evaluate(point + delta),
-                        color: "#e28e4e",
-                        label: "Right",
-                      },
-                    ]
-                  : [
-                      { x: point, y: value },
-                      { x: point + delta, y: nextValue, color: "#249b8d" },
-                    ]
-            }
-            tangent={
-              mode === "derivative" ? { x: point, expression } : undefined
-            }
-            rectangles={
-              mode === "integral" ? { count, from, to, expression } : undefined
-            }
-          />
-          <Timeline
-            steps={steps}
-            current={current}
-            onChange={(index) =>
-              mode === "integral"
-                ? setCount([4, 16, 48, 120][index])
-                : setDelta([1, 0.4, 0.1, 0.01][index])
-            }
-          />
-          <Insight>
-            <p>
-              {mode === "derivative"
-                ? `عندما تقل h = ${fmt(delta)}، تقترب النقطتان ويقترب ميل القاطع ${fmt(secantSlope)} من ميل المماس. المشتقة تقيس معدل التغير اللحظي عندما تكون معرفة.`
-                : mode === "limits"
-                  ? `النقطة اليسرى عند ${fmt(point - delta)} واليمنى عند ${fmt(point + delta)}. تصغير h يجعلنا نفحص قيمًا أقرب إلى ${point}. تقارب القيم هنا مشاهدة عددية وليس إثباتًا عامًا لوجود النهاية.`
-                  : `عدد المستطيلات ${count} وعرض كل منها ${fmt((to - from) / count)}. زيادة n تصغر العرض، فيتحسن تقريب المساحة الموقعة باستخدام نقاط المنتصف للدوال المتصلة.`}
-            </p>
-          </Insight>
-        </section>
-        <aside className="lab-properties">
-          <h3>متغيرات التجربة</h3>
-          {mode === "integral" ? (
-            <>
-              <Slider
-                label="n"
-                min={2}
-                max={150}
-                value={count}
-                onChange={setCount}
-              />
-              <Slider
-                label="a"
-                min={-4}
-                max={4}
-                step={0.25}
-                value={from}
-                onChange={setFrom}
-              />
-              <Slider
-                label="b"
-                min={-4}
-                max={4}
-                step={0.25}
-                value={to}
-                onChange={setTo}
-              />
-              <div className="metric">
-                <span>مجموع المنتصف</span>
-                <strong>{fmt(approximation)}</strong>
-              </div>
-              <div className="metric">
-                <span>فرق قيم الدالة الأصلية</span>
-                <strong>{fmt(exact)}</strong>
-              </div>
-              <div className="metric">
-                <span>الخطأ المطلق</span>
-                <strong>{fmt(Math.abs(exact - approximation))}</strong>
-              </div>
-            </>
-          ) : (
-            <>
-              <Slider
-                label="x / a"
-                min={-4}
-                max={4}
-                step={0.1}
-                value={point}
-                onChange={setPoint}
-              />
-              <Slider
-                label="h"
-                min={0.01}
-                max={2}
-                step={0.01}
-                value={delta}
-                onChange={setDelta}
-              />
-              <div className="metric">
-                <span>{mode === "limits" ? "من اليسار" : "ميل القاطع"}</span>
-                <strong>
-                  {fmt(
-                    mode === "limits" ? evaluate(point - delta) : secantSlope,
-                  )}
-                </strong>
-              </div>
-              <div className="metric">
-                <span>{mode === "limits" ? "من اليمين" : "ميل المماس"}</span>
-                <strong>
-                  {fmt(
-                    mode === "limits"
-                      ? evaluate(point + delta)
-                      : derived
-                        ? compileFunction(derived)(point)
-                        : NaN,
-                  )}
-                </strong>
-              </div>
-            </>
-          )}
-          {mode === "derivative" && (
-            <div className="result-line">
-              <small>المشتقة الرمزية</small>
-              <code dir="ltr">{derived || "غير متاحة"}</code>
-            </div>
-          )}
-          {mode === "integral" && (
-            <div className="result-line">
-              <small>الدالة الأصلية</small>
-              <code dir="ltr">
-                {primitive ? `${primitive} + C` : "غير متاحة"}
-              </code>
-            </div>
-          )}
-          {mode === "integral" && (
-            <p className="muted">
-              هذه مقارنة عددية وليست اختبارًا عامًا لتقارب التكامل. فحص العينات
-              قد لا يكشف كل نقطة تفرد؛ وفرق قيم الدالة الأصلية صالح للتكامل
-              المحدد فقط عند تحقق شروطه.
-            </p>
-          )}
-          {mode === "integral" && !Number.isFinite(approximation) && (
-            <p className="error-message">
-              رُصدت قيمة غير معرّفة داخل المجال أو عند أحد طرفيه. لا نستنتج قيمة
-              التكامل من هذه التجربة.
-            </p>
-          )}
-          <Why>
-            {mode === "integral"
-              ? "كل مستطيل يساوي ارتفاع الدالة عند المنتصف مضروبًا بعرض الجزء. التكامل قد يكون سالبًا تحت محور x؛ وعكس الحدود يعكس الإشارة."
-              : "نحسب فرق القيم مقسومًا على فرق المدخلات. لا نضع h = 0 مباشرة لأن القسمة على الصفر غير معرفة."}
-          </Why>
-        </aside>
-      </div>
-    </>
-  );
-}
 export function AdvisorLab() {
   const [before, setBefore] = useState("2x + 5 = 15"),
     [after, setAfter] = useState("2x = 20"),
@@ -1906,7 +1624,8 @@ export function PracticeLab({
     [revealed, setRevealed] = useState(0),
     [method, setMethod] = useState(false),
     [answer, setAnswer] = useState(""),
-    [feedback, setFeedback] = useState("");
+    [feedback, setFeedback] = useState(""),
+    [application, setApplication] = useState("");
   const analysis = analyze(question);
   function generate(level = difficulty) {
     const first = Math.floor(Math.random() * 8) + 1,
@@ -2028,6 +1747,26 @@ export function PracticeLab({
               <Why>{step.reason}</Why>
             </div>
           ))}
+          <div className="section-heading">
+            <h2>المكتبة والمستشار لهذا التمرين</h2>
+          </div>
+          <LearningPanel
+            key={question}
+            source={question}
+            graphDescription="تمرين مولّد؛ المستشار يراجع القانون المختار وخطواتك ونتيجتك على المسألة نفسها."
+            values={{}}
+            activity={[]}
+            running={false}
+            showAnimation={false}
+            onPlay={() => {}}
+            onReset={() => setApplication("")}
+            onShowSteps={() => {}}
+            onClearPreview={() => setApplication("")}
+            onPreview={(_expression, _purpose, reason) =>
+              setApplication(reason)
+            }
+          />
+          {application && <p className="visual-caption">{application}</p>}
         </section>
         <aside className="practice-note">
           <span className="eyebrow">YOUR EXPLORATION</span>

@@ -31,12 +31,12 @@ import type { LucideIcon } from "lucide-react";
 import { Workspace } from "./components/Workspace";
 import {
   AdvisorLab,
-  CalculusLab,
   GeometryLab,
   FreeGeometryWorkspace,
   PracticeLab,
   TrigLab,
 } from "./components/CoreLabs";
+import { CalculusLab } from "./components/CalculusLab";
 import {
   CombinatoricsLab,
   LinearLab,
