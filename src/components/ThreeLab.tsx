@@ -1,11 +1,28 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { RotateCcw } from "lucide-react";
-import { compileFunction, fmt, mathRequest, safeParse, symbolic } from "../engine/math";
+import { fmt } from "../engine/math";
+import { sampleSurface, surfacePresets } from "../engine/surfaces";
 import { MathInput, Slider, Why } from "./Controls";
 import { Insight, LabHeader } from "./CoreLabs";
 import { MathTools } from "./MathTools";
+
+function frameSurface(
+  camera: THREE.PerspectiveCamera,
+  controls: OrbitControls,
+  geometry: THREE.BufferGeometry,
+) {
+  geometry.computeBoundingSphere();
+  const bounds = geometry.boundingSphere;
+  if (!bounds || bounds.radius <= 0 || !Number.isFinite(bounds.radius)) return;
+  const direction = camera.position.clone().sub(controls.target).normalize();
+  const vertical = THREE.MathUtils.degToRad(camera.fov) / 2;
+  const angle = Math.min(vertical, Math.atan(Math.tan(vertical) * camera.aspect));
+  controls.target.copy(bounds.center);
+  camera.position.copy(bounds.center).addScaledVector(direction, (bounds.radius / Math.sin(angle)) * 1.1);
+  controls.update();
+}
 
 export default function ThreeLab() {
   const mountRef = useRef<HTMLDivElement>(null);
@@ -16,6 +33,7 @@ export default function ThreeLab() {
     mesh: THREE.Mesh;
     controls: OrbitControls;
     camera: THREE.PerspectiveCamera;
+    section: THREE.LineSegments;
   } | null>(null);
   const [shape, setShape] = useState("cube"),
     [dimension, setDimension] = useState(2),
@@ -24,6 +42,19 @@ export default function ThreeLab() {
     [surfaceSource, setSurfaceSource] = useState("x^2+y^2"),
     [draft, setDraft] = useState("x^2+y^2"),
     [error, setError] = useState("");
+  const [scope, setScope] = useState({ a: 2, b: 1.5, c: 2 });
+  const [domain, setDomain] = useState([0, 2 * Math.PI, 0, 2 * Math.PI]);
+  const [showSection, setShowSection] = useState(false);
+  const sampled = useMemo(() => {
+    try {
+      return { data: sampleSurface(surface, scope, domain), error: "" };
+    } catch (failure) {
+      return {
+        data: null,
+        error: failure instanceof Error ? failure.message : "تعذر رسم السطح.",
+      };
+    }
+  }, [surface, scope, domain]);
   useEffect(() => {
     if (shape === "surface" && focusSurfaceRef.current) {
       surfaceInputRef.current?.focus();
@@ -87,12 +118,19 @@ export default function ThreeLab() {
     });
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), material);
     scene.add(mesh);
-    sceneRef.current = { scene, mesh, camera, controls };
+    const section = new THREE.LineSegments(
+      new THREE.BufferGeometry(),
+      new THREE.LineBasicMaterial({ color: "#e34965", depthTest: false }),
+    );
+    section.renderOrder = 2;
+    scene.add(section);
+    sceneRef.current = { scene, mesh, camera, controls, section };
     const observer = new ResizeObserver(() => {
       const { width, height } = mount.getBoundingClientRect();
       renderer.setSize(width, height);
       camera.aspect = width / Math.max(1, height);
       camera.updateProjectionMatrix();
+      if (mesh.userData.surface) frameSurface(camera, controls, mesh.geometry);
     });
     observer.observe(mount);
     let animation: number;
@@ -129,65 +167,57 @@ export default function ThreeLab() {
     if (!state) return;
     let geometry: THREE.BufferGeometry;
     if (shape === "surface") {
-      const evaluate = compileFunction(surface),
-        segments = 60,
-        positions: number[] = [],
-        indices: number[] = [],
-        colors: number[] = [];
-      for (let row = 0; row <= segments; row++)
-        for (let column = 0; column <= segments; column++) {
-          const x = -3 + (column / segments) * 6,
-            y = -3 + (row / segments) * 6,
-            z = evaluate(x, { y });
-          positions.push(
-            x,
-            y,
-            Number.isFinite(z) ? Math.max(-8, Math.min(12, z)) : NaN,
-          );
-          const color = new THREE.Color().setHSL(
-            0.48 + Math.min(1, Math.max(0, (z + 2) / 12)) * 0.24,
-            0.48,
-            0.58,
-          );
-          colors.push(color.r, color.g, color.b);
-        }
-      for (let row = 0; row < segments; row++)
-        for (let column = 0; column < segments; column++) {
-          const index = row * (segments + 1) + column,
-            neighbors = [
-              index,
-              index + 1,
-              index + segments + 1,
-              index + segments + 2,
-            ];
-          if (
-            neighbors.every((vertex) =>
-              Number.isFinite(positions[vertex * 3 + 2]),
-            )
-          )
-            indices.push(
-              index,
-              index + 1,
-              index + segments + 1,
-              index + 1,
-              index + segments + 2,
-              index + segments + 1,
-            );
-        }
+      const positions = sampled.data?.positions || [];
+      const colors: number[] = [];
+      for (let index = 2; index < positions.length; index += 3) {
+        const color = new THREE.Color().setHSL(
+          0.48 + Math.min(1, Math.max(0, (positions[index] + 4) / 8)) * 0.24,
+          0.48,
+          0.58,
+        );
+        colors.push(color.r, color.g, color.b);
+      }
       geometry = new THREE.BufferGeometry();
       geometry.setAttribute(
         "position",
-        new THREE.Float32BufferAttribute(
-          positions.map((value) => (Number.isFinite(value) ? value : 0)),
-          3,
-        ),
+        new THREE.Float32BufferAttribute(positions, 3),
       );
       geometry.setAttribute(
         "color",
         new THREE.Float32BufferAttribute(colors, 3),
       );
-      geometry.setIndex(indices);
       geometry.computeVertexNormals();
+      frameSurface(state.camera, state.controls, geometry);
+      const sectionPositions: number[] = [];
+      for (let index = 0; index < positions.length; index += 9) {
+        const intersections: number[][] = [];
+        for (const [start, end] of [
+          [0, 1],
+          [1, 2],
+          [2, 0],
+        ]) {
+          const first = positions.slice(
+              index + start * 3,
+              index + start * 3 + 3,
+            ),
+            second = positions.slice(index + end * 3, index + end * 3 + 3);
+          if (first[2] < 0 === second[2] < 0) continue;
+          const ratio = first[2] / (first[2] - second[2]);
+          intersections.push([
+            first[0] + ratio * (second[0] - first[0]),
+            first[1] + ratio * (second[1] - first[1]),
+            0,
+          ]);
+        }
+        if (intersections.length === 2)
+          sectionPositions.push(...intersections[0], ...intersections[1]);
+      }
+      state.section.geometry.dispose();
+      state.section.geometry = new THREE.BufferGeometry();
+      state.section.geometry.setAttribute(
+        "position",
+        new THREE.Float32BufferAttribute(sectionPositions, 3),
+      );
     } else if (shape === "sphere")
       geometry = new THREE.SphereGeometry(dimension, 48, 32);
     else if (shape === "cylinder")
@@ -208,6 +238,7 @@ export default function ThreeLab() {
       geometry.rotateX(Math.PI / 2);
     state.mesh.geometry.dispose();
     state.mesh.geometry = geometry;
+    state.mesh.userData.surface = shape === "surface";
     state.mesh.position.set(
       0,
       0,
@@ -223,7 +254,11 @@ export default function ThreeLab() {
     material.vertexColors = shape === "surface";
     material.color.set(shape === "surface" ? "#ffffff" : "#8a80d2");
     material.needsUpdate = true;
-  }, [shape, dimension, height, surface]);
+  }, [shape, dimension, height, sampled]);
+  useEffect(() => {
+    if (sceneRef.current)
+      sceneRef.current.section.visible = shape === "surface" && showSection;
+  }, [shape, showSection]);
   const volume =
     shape === "cube"
       ? dimension ** 3
@@ -249,23 +284,26 @@ export default function ThreeLab() {
               ? dimension ** 2 +
                 2 * dimension * Math.hypot(height, dimension / 2)
               : (Math.sqrt(3) / 2) * dimension ** 2 + 3 * dimension * height;
-  function applySurface(expression: string) {
+  function applySurface(expression: string, nextDomain?: number[]) {
     try {
-      const request = mathRequest(expression);
-      safeParse(request.expression, ["x", "y"]);
-      const calculated = request.operation ? symbolic(request.expression, request.operation) : request.expression;
-      safeParse(calculated, ["x", "y"]);
-      const evaluate = compileFunction(calculated);
-      const samples = Array.from({ length: 61 }, (_, index) => -3 + index / 10);
-      if (!samples.some((x) => samples.some((y) => Number.isFinite(evaluate(x, { y })))))
-        throw new Error("لا توجد قيم حقيقية للسطح ضمن مجال العرض.");
+      const selectedDomain =
+        nextDomain ||
+        surfacePresets.find((preset) => preset.expression === expression)
+          ?.domain ||
+        domain;
+      sampleSurface(expression, scope, selectedDomain);
       setDraft(expression);
       setSurfaceSource(expression);
-      setSurface(calculated);
+      setSurface(expression);
+      setDomain(selectedDomain);
       setShape("surface");
       setError("");
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : "تعذر قراءة الدالة في x وy.");
+      setError(
+        failure instanceof Error
+          ? failure.message
+          : "تعذر قراءة الدالة في x وy.",
+      );
     }
   }
   return (
@@ -273,7 +311,7 @@ export default function ThreeLab() {
       <LabHeader english="3D MATH LAB" title="بُعد آخر للفهم" />
       <MathTools
         expression={surfaceSource}
-        variables={["x", "y"]}
+        variables={["x", "y", "z", "a", "b", "c", "u", "v"]}
         onWrite={() => {
           if (shape === "surface") {
             surfaceInputRef.current?.focus();
@@ -283,20 +321,12 @@ export default function ThreeLab() {
           }
         }}
         onApply={applySurface}
-        presets={[
-          { title: "القطع المكافئ الدائري", expression: "x^2+y^2" },
-          { title: "سطح السرج", expression: "x^2-y^2" },
-          { title: "الموجة", expression: "sin(x)*cos(y)" },
-          { title: "المستوى", expression: "x+y" },
-          { title: "نصف الكرة", expression: "sqrt(9-x^2-y^2)" },
-        ]}
+        presets={surfacePresets}
       />
       <div className="lab-layout">
         <section className="lab-stage three-stage">
           <div className="section-heading">
-            <h2>
-              {shape === "surface" ? "سطح دالة متعددة المتغيرات" : "المجسم"}
-            </h2>
+            <h2>{shape === "surface" ? "السطح الرياضي" : "المجسم"}</h2>
             <button
               title="إعادة ضبط الكاميرا"
               aria-label="إعادة ضبط الكاميرا"
@@ -305,6 +335,7 @@ export default function ThreeLab() {
                 if (state) {
                   state.camera.position.set(10, -12, 10);
                   state.controls.target.set(0, 0, 1);
+                  if (shape === "surface") frameSurface(state.camera, state.controls, state.mesh.geometry);
                   state.controls.update();
                 }
               }}
@@ -321,9 +352,12 @@ export default function ThreeLab() {
           <Insight>
             <p>
               {shape === "surface"
-                ? `ارتفاع كل نقطة يساوي z = ${surface}. تعديل الدالة يغير السطح نفسه. المجال المعروض [-3,3]² والارتفاع مقصوص بين -8 و12 لحفظ وضوح العرض.`
+                ? sampled.data?.kind === "implicit"
+                  ? "تمثيل تقريبي للمعادلة الضمنية في المجال [-4,4]³. المعادلة التي لا تحتوي z تمتد رأسيًا كأسطوانة. المقطع الأحمر هو التقاطع مع المستوى z=0."
+                  : sampled.data?.kind === "parametric"
+                    ? "سطح بارامتري بالإحداثيات x(u,v)، y(u,v)، z(u,v). زجاجة كلاين هنا تمثيل متقاطع ذاتيًا في ثلاثة أبعاد، وليست تضمينًا بلا تقاطع."
+                    : "سطح ارتفاع z=f(x,y) في المجال [-4,4]²؛ تستبعد القيم غير الحقيقية والارتفاعات خارج [-12,12]."
                 : `تغيير ${["sphere", "cylinder", "cone"].includes(shape) ? "نصف القطر" : "طول ضلع القاعدة"} يعيد حساب المجسم وحجمه ومساحته. الحجم يتناسب تكعيبيًا عند تكبير جميع الأبعاد بالنسبة نفسها، والمساحة تربيعيًا.`}
-              {shape === "surface" && mathRequest(surfaceSource).operation === "integral" && " عند التكامل يعرض السطح الدالة الأصلية مع C = 0."}
             </p>
           </Insight>
         </section>
@@ -342,7 +376,7 @@ export default function ThreeLab() {
               ["cone", "مخروط"],
               ["pyramid", "هرم مربع"],
               ["prism", "منشور مثلثي منتظم"],
-              ["surface", "سطح دالة"],
+              ["surface", "سطح رياضي"],
             ].map(([id, name]) => (
               <option key={id} value={id}>
                 {name}
@@ -357,15 +391,86 @@ export default function ThreeLab() {
               }}
             >
               <label className="field-label">
-                z =
+                المعادلة أو الإحداثيات الوسيطة
                 <MathInput
                   inputRef={surfaceInputRef}
                   label="دالة السطح"
                   value={draft}
                   onChange={setDraft}
-                  variables={["x", "y"]}
+                  variables={["x", "y", "z", "a", "b", "c", "u", "v"]}
                 />
               </label>
+              <label className="field-label">
+                اسم السطح
+                <select
+                  aria-label="اسم السطح"
+                  value={
+                    surfacePresets.find(
+                      (preset) => preset.expression === surface,
+                    )?.title || ""
+                  }
+                  onChange={(event) => {
+                    const preset = surfacePresets.find(
+                      (item) => item.title === event.target.value,
+                    );
+                    if (preset) applySurface(preset.expression, preset.domain);
+                  }}
+                >
+                  <option value="" disabled>
+                    سطح مخصص
+                  </option>
+                  {surfacePresets.map((preset) => (
+                    <option key={preset.title}>{preset.title}</option>
+                  ))}
+                </select>
+              </label>
+              {(sampled.data?.parameters || ["a", "b", "c"]).map((name) => (
+                <Slider
+                  key={name}
+                  label={name}
+                  min={0.25}
+                  max={3}
+                  step={0.05}
+                  value={scope[name as keyof typeof scope]}
+                  onChange={(value) =>
+                    setScope((previous) => ({ ...previous, [name]: value }))
+                  }
+                />
+              ))}
+              <label className="field-label">
+                <input
+                  type="checkbox"
+                  checked={showSection}
+                  onChange={(event) => setShowSection(event.target.checked)}
+                />{" "}
+                المقطع في المستوى z = 0
+              </label>
+              {sampled.data?.kind === "parametric" &&
+                ["u", "v"].map((name, index) => (
+                  <div key={name} className="field-label">
+                    {name}
+                    {["الأدنى", "الأعلى"].map((label, edge) => (
+                      <label key={label}>
+                        {label}
+                        <input
+                          aria-label={`${name} ${label}`}
+                          type="number"
+                          step="0.1"
+                          value={domain[index * 2 + edge]}
+                          onChange={(event) => {
+                            const value = Number(event.target.value);
+                            if (Number.isFinite(value))
+                              setDomain((previous) =>
+                                previous.map((item, position) =>
+                                  position === index * 2 + edge ? value : item,
+                                ),
+                              );
+                          }}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                ))}
               <button className="button primary full-width">تحديث السطح</button>
               <button
                 type="button"
@@ -412,7 +517,9 @@ export default function ThreeLab() {
               </Why>
             </>
           )}
-          {error && <p className="error-message">{error}</p>}
+          {(error || (shape === "surface" && sampled.error)) && (
+            <p className="error-message">{error || sampled.error}</p>
+          )}
         </aside>
       </div>
     </>

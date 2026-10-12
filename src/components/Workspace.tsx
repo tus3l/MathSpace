@@ -32,6 +32,7 @@ import { Graph } from "./Graph";
 import { Formula, MathInput, Slider, Why } from "./Controls";
 import { MathTools } from "./MathTools";
 import { LearningPanel } from "./LearningPanel";
+import { ProofNotebook } from "./ProofNotebook";
 
 function initialVisual(expression: string): WorkspaceVisual {
   try {
@@ -370,6 +371,7 @@ export function Workspace({
           حفظ المسألة
         </button>
       </div>
+      <ProofNotebook />
       <details className="workspace-examples">
         <summary>
           <Plus size={15} /> أمثلة ومفاهيم إضافية

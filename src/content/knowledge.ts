@@ -1,3 +1,5 @@
+import { academicTopics, supplementaryTopics } from "./academicLaws";
+
 export type View =
   | "home"
   | "workspace"
@@ -34,6 +36,96 @@ export type Topic = {
   view: View;
 };
 export const topics: Topic[] = [
+  {
+    id: "maclaurin",
+    title: "متسلسلة مكلورين",
+    english: "Maclaurin Taylor series ماكلوران ماكلورين",
+    category: "التفاضل والتكامل",
+    formula: "f(x)=\\sum_{n=0}^{\\infty}\\frac{f^{(n)}(0)}{n!}x^n",
+    summary: "مكلورين حالة متسلسلة تايلور حول الصفر.",
+    detail:
+      "الصيغة تساوي الدالة في مجال تقاربها عندما تكون الدالة تحليلية حول الصفر. وجود جميع المشتقات وحده لا يضمن المساواة. في التقريب المنتهي، الباقي R_N(x)=f^(N+1)(ξ)x^(N+1)/(N+1)! بشروط مبرهنة تايلور.",
+    when: "لتقريب الدوال قرب الصفر وحساب النهايات وتقدير الخطأ.",
+    why: "اختيار معامل x^n مساويًا للمشتقة من الرتبة n عند الصفر مقسومة على n! يطابق مشتقات الدالة.",
+    example:
+      "exp(x)=1+x+x²/2!+x³/3!+…؛ sin(x)=x-x³/3!+x⁵/5!-…؛ log(1+x)=x-x²/2+x³/3-… عندما |x|<1.",
+    mistakes:
+      "نسيان n! أو مجال التقارب أو اعتبار التقريب المنتهي مساواة دقيقة.",
+    related: ["derivative", "sequences"],
+    view: "sequences",
+  },
+  {
+    id: "chebyshev-polynomials",
+    title: "متعددات حدود تشيبيشيف",
+    english: "Chebyshev تشبيشيف تشيبيشف polynomials approximation",
+    category: "الدوال",
+    formula: "T_0(x)=1,\\quad T_1(x)=x,\\quad T_{n+1}(x)=2xT_n(x)-T_{n-1}(x)",
+    summary: "متعددات حدود تحقق T_n(cos θ)=cos(nθ).",
+    detail:
+      "متعامدة على [-1,1] بالوزن 1/√(1-x²). جذور T_n هي cos((2k-1)π/(2n))، حيث k=1,…,n وn≥1.",
+    when: "في التقريب العددي واختيار عقد الاستيفاء وتقليل تذبذب الاستيفاء.",
+    why: "علاقة تكرار جيب التمام cos((n+1)θ)=2cosθ cos(nθ)-cos((n-1)θ) تنتج علاقة التكرار.",
+    example: "T₂(x)=2x²-1، T₃(x)=4x³-3x.",
+    mistakes:
+      "الخلط بين متعددات حدود تشيبيشيف ومتباينته الاحتمالية؛ المتغير θ بالراديان.",
+    related: ["functions", "chebyshev-inequality"],
+    view: "workspace",
+  },
+  {
+    id: "chebyshev-inequality",
+    title: "متباينة تشيبيشيف",
+    english: "Chebyshev تشبيشيف تشيبيشف inequality probability",
+    category: "الإحصاء",
+    formula: "P(|X-\\mu|\\ge k\\sigma)\\le\\frac{1}{k^2},\\quad k>0",
+    summary: "حد لاحتمال الابتعاد عن المتوسط، دون افتراض توزيع طبيعي.",
+    detail:
+      "يشترط متوسط منتهٍ وتباين منتهٍ موجب σ². إذا كان σ=0 فإن X=μ تقريبًا مؤكدًا، وتستخدم صيغة P(|X-μ|≥t)≤σ²/t² لكل t>0.",
+    when: "لتقدير حد أعلى لاحتمال القيم البعيدة عندما لا نعرف شكل التوزيع.",
+    why: "تطبيق متباينة ماركوف على المتغير غير السالب (X-μ)² يعطي الحد σ²/t².",
+    example:
+      "احتمال الابتعاد بمقدار انحرافين معياريين أو أكثر لا يزيد على 1/4.",
+    mistakes: "اعتبار الحد احتمالًا دقيقًا أو استعمال تباين غير منتهٍ.",
+    related: ["statistics", "probability"],
+    view: "statistics",
+  },
+  {
+    id: "hodge",
+    title: "معادلات وتحليل هودج",
+    english: "Hodge decomposition Laplacian harmonic differential forms",
+    category: "الهندسة التفاضلية",
+    formula:
+      "\\Delta=d\\delta+\\delta d,\\quad\\omega=d\\alpha+\\delta\\beta+h,\\quad\\Delta h=0",
+    summary: "تفكيك شكل تفاضلي إلى جزء تام وجزء مرافق تام وجزء توافقي.",
+    detail:
+      "على متشعب ريماني مدمج موجه بلا حافة، δ هو المرافق لـd بالنسبة إلى جداء L². أجزاء التفكيك متعامدة؛ h توافقي. مع وجود حافة نحتاج شروطًا حدية. تمثل الأشكال التوافقية أصناف تماسك دي رام.",
+    when: "لدراسة الأشكال التفاضلية والتماسك والمعادلات الإهليلجية؛ المحتوى هنا مرجع نظري وليس محللًا عدديًا لهذه المعادلات.",
+    why: "نظرية هودج تربط نواة لابلاسيان هودج بالتماسك؛ الشكل التوافقي يحقق dh=0 وδh=0 في هذه الشروط.",
+    example:
+      "على دائرة بوصفها R/(2πZ)، الشكل dθ توافقي ويمثل صنفًا غير صفري في H¹.",
+    mistakes:
+      "الخلط بين تحليل هودج المثبت وفرضية هودج المفتوحة أو تجاهل شروط الحافة.",
+    related: ["hodge-conjecture", "derivative"],
+    view: "library",
+  },
+  {
+    id: "hodge-conjecture",
+    title: "فرضية هودج",
+    english: "Hodge conjecture algebraic cycles",
+    category: "الهندسة التفاضلية",
+    formula:
+      "H^{2p}(X,\\mathbb Q)\\cap H^{p,p}(X)=\\operatorname{span}_{\\mathbb Q}\\{[Z]:\\operatorname{codim}Z=p\\}",
+    summary: "فرضية مفتوحة عن أصناف هودج النسبية والدورات الجبرية.",
+    detail:
+      "على متنوع جبري إسقاطي أملس فوق الأعداد المركبة، تتوقع أن كل صنف نسبي من النوع (p,p) تركيب خطي نسبي لأصناف دورات جبرية من البعد المشترك p. التقاطع يُفهم بعد إدراج التماسك النسبي في التماسك المركب.",
+    when: "لدراسة الصلة بين الطوبولوجيا والهندسة الجبرية، لا بوصفها قاعدة عامة مثبتة.",
+    why: "أصناف الدورات الجبرية من البعد المشترك p هي من النوع (p,p)؛ الفرضية تسأل عن الاتجاه العكسي بأصناف نسبية.",
+    example:
+      "الحالة p=1 مثبتة بمبرهنة ليفشيتز (1,1)، أما الفرضية العامة فما زالت مفتوحة.",
+    mistakes:
+      "عرض الفرضية كبرهان مكتمل أو استبدال المعاملات النسبية بمعاملات صحيحة في الادعاء العام.",
+    related: ["hodge"],
+    view: "library",
+  },
   {
     id: "quadratic",
     title: "المعادلة التربيعية",
@@ -385,6 +477,8 @@ export const topics: Topic[] = [
     related: ["probability", "square"],
     view: "combinatorics",
   },
+  ...academicTopics,
+  ...supplementaryTopics,
 ];
 export const functionFamilies = [
   ["خطية", "2*x+3"],

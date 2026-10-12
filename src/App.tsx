@@ -3,13 +3,11 @@ import {
   House,
   ChartNoAxesCombined,
   Lightbulb,
-  Shapes,
   Box,
   Triangle,
   Sigma,
   MoveUpRight,
   Grid2X2,
-  Dices,
   BarChart3,
   Waves,
   Infinity as InfinityIcon,
@@ -37,14 +35,12 @@ import {
   GeometryLab,
   FreeGeometryWorkspace,
   PracticeLab,
-  ProofLab,
   TrigLab,
 } from "./components/CoreLabs";
 import {
   CombinatoricsLab,
   LinearLab,
   NumbersLab,
-  ProbabilityLab,
   SequencesLab,
   StatisticsLab,
   TransformsLab,
@@ -100,25 +96,11 @@ const navigation: Navigation[] = [
     color: "#e28e4e",
   },
   {
-    id: "proof",
-    title: "الإثبات البصري",
-    english: "Visual Proof",
-    icon: Shapes,
-    color: "#249b8d",
-  },
-  {
     id: "geometry",
     title: "الهندسة",
     english: "Geometry",
     icon: Triangle,
     color: "#249b8d",
-  },
-  {
-    id: "trigonometry",
-    title: "المثلثات",
-    english: "Trigonometry",
-    icon: Waves,
-    color: "#d8687e",
   },
   {
     id: "calculus",
@@ -147,13 +129,6 @@ const navigation: Navigation[] = [
     english: "Statistics",
     icon: BarChart3,
     color: "#e28e4e",
-  },
-  {
-    id: "probability",
-    title: "الاحتمالات",
-    english: "Probability",
-    icon: Dices,
-    color: "#d8687e",
   },
   {
     id: "sequences",
@@ -205,13 +180,7 @@ const navigation: Navigation[] = [
     color: "#249b8d",
   },
 ];
-const sidebarViews: View[] = [
-  "free",
-  "advisor",
-  "geometry",
-  "three",
-  "trigonometry",
-];
+const sidebarViews: View[] = ["free", "advisor", "geometry", "three"];
 const sidebarNavigation = sidebarViews.map((id) =>
   navigation.find((item) => item.id === id)!,
 );
@@ -262,6 +231,8 @@ export default function App() {
     );
   }
   function navigate(next: View) {
+    if (["proof", "probability", "trigonometry"].includes(next))
+      next = "workspace";
     setView(next);
     setDrawer(false);
     setSearching(false);
@@ -308,14 +279,10 @@ export default function App() {
         }}
         clearHistory={() => setHistory([])}
       />
-    ) : view === "proof" ? (
-      <ProofLab />
     ) : view === "geometry" ? (
       <GeometryLab />
     ) : view === "free" ? (
       <FreeGeometryWorkspace />
-    ) : view === "trigonometry" ? (
-      <TrigLab />
     ) : view === "complex" ? (
       <TrigLab complex />
     ) : view === "calculus" ? (
@@ -328,8 +295,6 @@ export default function App() {
       <LinearLab />
     ) : view === "statistics" ? (
       <StatisticsLab />
-    ) : view === "probability" ? (
-      <ProbabilityLab />
     ) : view === "sequences" ? (
       <SequencesLab />
     ) : view === "transforms" ? (

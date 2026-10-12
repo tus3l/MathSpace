@@ -226,15 +226,17 @@ export function Library({
               </div>
             </div>
             <div className="dialog-actions">
-              <button
-                className="button primary"
-                onClick={() => {
-                  onNavigate(selected.view);
-                  setSelected(null);
-                }}
-              >
-                <ExternalLink size={16} /> افتح التجربة
-              </button>
+              {selected.view !== "library" && (
+                <button
+                  className="button primary"
+                  onClick={() => {
+                    onNavigate(selected.view);
+                    setSelected(null);
+                  }}
+                >
+                  <ExternalLink size={16} /> افتح التجربة
+                </button>
+              )}
               <button
                 className="button secondary"
                 onClick={() => toggleBookmark(selected.id)}

@@ -1586,7 +1586,7 @@ export function CalculusLab() {
       <div className="lab-layout">
         <section className="lab-stage">
           <form
-            className="inline-form stage-form"
+            className="inline-form stage-form calculus-form"
             onSubmit={(event) => {
               event.preventDefault();
               try {
@@ -1599,11 +1599,11 @@ export function CalculusLab() {
             }}
           >
             <span className="mono">f(x) =</span>
-            <input
-              aria-label="دالة التفاضل والتكامل"
-              dir="ltr"
+            <MathInput
+              label="دالة التفاضل والتكامل"
               value={input}
-              onChange={(event) => setInput(event.target.value)}
+              onChange={setInput}
+              variables={["x"]}
             />
             <button className="button primary">
               رسم <MoveUpRight size={15} />
