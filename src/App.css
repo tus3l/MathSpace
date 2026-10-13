@@ -434,13 +434,6 @@
   gap: 12px;
   box-shadow: 0 2px 5px #00000002;
 }
-.equation-marker {
-  font-family: Georgia, serif;
-  font-size: 26px;
-  color: var(--accent);
-  padding: 0 12px;
-  border-inline-end: 1px solid var(--line);
-}
 .equation-entry input {
   flex: 1;
   border: none;
@@ -2592,9 +2585,6 @@
     padding: 8px;
     gap: 8px;
     flex-wrap: wrap;
-  }
-  .equation-marker {
-    padding: 0 8px;
   }
   .equation-entry input {
     font-size: 15px;

@@ -448,7 +448,6 @@ export function Workspace({
           submit();
         }}
       >
-        <div className="equation-marker">ƒ</div>
         <MathInput
           inputRef={equationRef}
           label="المعادلة"
