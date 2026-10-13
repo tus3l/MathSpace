@@ -158,11 +158,22 @@ export function Workspace({
               label:
                 visual.expressions.length === 2
                   ? "فرق الطرفين"
-                  : visual.operation === "derivative"
-                    ? "بعد: f′(x)"
-                    : visual.operation === "integral"
-                      ? "بعد: F(x)، C=0"
-                      : "f(x)",
+                  : visual.alternate
+                    ? "الحالة +"
+                    : visual.operation === "derivative"
+                      ? "بعد: f′(x)"
+                      : visual.operation === "integral"
+                        ? "بعد: F(x)، C=0"
+                        : "f(x)",
+            },
+          ]
+        : []),
+      ...(visual.alternate
+        ? [
+            {
+              expression: visual.alternate,
+              color: "#249b8d",
+              label: "الحالة −",
             },
           ]
         : []),
@@ -203,6 +214,7 @@ export function Workspace({
       visual.expressions.length,
       visual.operation,
       visual.original,
+      visual.alternate,
       activePreview,
       mode,
       extra,
@@ -592,7 +604,9 @@ export function Workspace({
                   : undefined
             }
             rectangles={
-              visual.operation === "integral" && visual.original
+              visual.area
+                ? { count: 64, ...visual.area }
+                : visual.operation === "integral" && visual.original
                 ? {
                     count: 32,
                     from: 0,

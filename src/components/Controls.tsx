@@ -45,7 +45,6 @@ export function MathInput({
   const [group, setGroup] = useState(0);
   const [keyboardOpen, setKeyboardOpen] = useState(keyboardInitiallyOpen);
   const [editError, setEditError] = useState("");
-  const [notationNotice, setNotationNotice] = useState("");
   let preview = "";
   try {
     const request = mathRequest(value);
@@ -82,11 +81,6 @@ export function MathInput({
       const next = insertMathKey(value, start, end, key);
       onChange(next.value);
       setEditError("");
-      setNotationNotice(
-        key.notationOnly
-          ? "أُدرجت الصيغة للكتابة والمعاينة؛ حلها أو حسابها تلقائيًا غير مدعوم في هذا الحقل."
-          : "",
-      );
       restoreSelection(next.start, next.end);
     } catch (error) {
       setEditError(
@@ -104,7 +98,6 @@ export function MathInput({
         onChange={(event) => {
           onChange(event.target.value);
           setEditError("");
-          setNotationNotice("");
         }}
         spellCheck={false}
         autoCapitalize="off"
@@ -209,7 +202,7 @@ export function MathInput({
               {group === 2
                 ? "الزوايا بالراديان؛ استخدم زر التحويل للدرجات."
                 : group === 4
-                  ? "الاشتقاق والتكامل غير المحدد محسوبان؛ النهاية والتكامل المحدد والمجموع قوالب إدخال فقط."
+                  ? "الاشتقاق والتكامل والنهاية والمجموع محسوبة؛ القيم غير المتحقق منها تُعلّم بـ ≈."
                   : group === 1
                     ? "استبدل القيم داخل القالب؛ الجذور الكسرية للقيم غير السالبة."
                     : "يمكن تعديل القوالب والأرقام مباشرة من حقل الإدخال."}
@@ -291,11 +284,6 @@ export function MathInput({
             </div>
           </div>
         </div>
-      )}
-      {notationNotice && (
-        <p className="math-notation-notice" role="status">
-          {notationNotice}
-        </p>
       )}
       {editError && (
         <p className="math-keyboard-error" role="alert">

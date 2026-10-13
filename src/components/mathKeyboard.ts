@@ -9,7 +9,6 @@ export type MathKey = {
   suffix?: string;
   fallback?: string;
   operation?: boolean;
-  notationOnly?: boolean;
 };
 
 export const mathKeyGroups: { title: string; keys: MathKey[] }[] = [
@@ -173,29 +172,26 @@ export const mathKeyGroups: { title: string; keys: MathKey[] }[] = [
         operation: true,
       },
       {
-        title: "تكامل محدد؛ إدخال فقط دون حساب تلقائي",
+        title: "تكامل محدد؛ عدّل الحدين",
         latex: "\\int_0^1 f(x)\\,dx",
         prefix: "definiteIntegral(",
         suffix: ",0,1)",
         operation: true,
-        notationOnly: true,
       },
       {
-        title: "نهاية؛ إدخال فقط دون حساب تلقائي",
+        title: "نهاية؛ عدّل النقطة (يمكن استخدام ∞)",
         latex: "\\lim_{x\\to0} f(x)",
         prefix: "limit(",
         suffix: ",x,0)",
         operation: true,
-        notationOnly: true,
       },
       {
-        title: "مجموع؛ إدخال فقط دون حساب تلقائي",
+        title: "مجموع؛ عدّل الحدين (الأعلى قد يكون ∞)",
         latex: "\\sum_{n=1}^{10} f(n)",
         prefix: "sum(",
         suffix: ",n,1,10)",
         fallback: "n",
         operation: true,
-        notationOnly: true,
       },
     ],
   },
@@ -297,15 +293,24 @@ export const mathKeyGroups: { title: string; keys: MathKey[] }[] = [
         ["أصغر أو يساوي", "\\le", "<="],
         ["أكبر أو يساوي", "\\ge", ">="],
         ["لا يساوي", "\\ne", "!="],
-        ["زائد أو ناقص", "\\pm", "±"],
-        ["ما لا نهاية", "\\infty", "∞"],
       ].map(([title, latex, prefix]) => ({
-        title: `${title}؛ إدخال فقط دون حل تلقائي`,
+        title: `${title}؛ تُحل المتباينات الخطية والتربيعية في x`,
         latex,
         prefix,
         fallback: "",
-        notationOnly: true,
       })),
+      {
+        title: "زائد أو ناقص؛ تُحل الحالتان + و−",
+        latex: "\\pm",
+        prefix: "±",
+        fallback: "",
+      },
+      {
+        title: "ما لا نهاية؛ حدّ في النهايات والمجاميع والتكاملات",
+        latex: "\\infty",
+        prefix: "∞",
+        fallback: "",
+      },
     ],
   },
 ];
@@ -315,7 +320,7 @@ export function keyboardPreview(value: string): string {
   if (!source || source.length > 250) return "";
   const request = source.match(/^(definiteIntegral|limit|sum)\((.*)\)$/);
   if (request) {
-    const node = parse(source);
+    const node = parse(source.replace(/∞/g, "Infinity"));
     if (!("args" in node)) return "";
     const args = node.args as MathNode[];
     if (request[1] === "definiteIntegral" && args.length === 3)

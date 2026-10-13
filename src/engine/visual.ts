@@ -1,4 +1,4 @@
-import { ConstantNode, parse } from "mathjs";
+import { ConstantNode, SymbolNode, parse } from "mathjs";
 import type { FunctionNode, MathNode } from "mathjs";
 import { contours } from "d3-contour";
 import {
@@ -9,6 +9,18 @@ import {
   safeParse,
   symbolic,
 } from "./math";
+import {
+  definiteIntegral,
+  definiteIntegralRequest,
+  evaluateLimit,
+  evaluateSum,
+  expandPlusMinus,
+  fmtValue,
+  infiniteBound,
+  limitRequest,
+  solveInequality,
+  sumRequest,
+} from "./extended";
 
 export type VisualPoint = {
   x: number;
@@ -31,34 +43,42 @@ export type WorkspaceVisual = {
   description: string;
   operation: "derivative" | "integral" | null;
   original?: string;
+  area?: { from: number; to: number; expression: string };
+  /** Second curve of a ± input. */
+  alternate?: string;
 };
+
+const relationPattern = /(<=|>=|!=|<|>|=|±)/;
+const mapSides = (text: string, map: (side: string) => string) =>
+  text
+    .replace(/∞/g, "Infinity")
+    .split(relationPattern)
+    .map((part, index) => (index % 2 || !part.trim() ? part : map(part)))
+    .join("");
 
 export function resolveVisualInput(
   input: string,
   scope: Record<string, number>,
 ) {
   const request = mathRequest(input);
-  const expression = request.expression
-    .split("=")
-    .map((side) =>
-      parse(side)
-        .transform((node) =>
-          node.type === "SymbolNode" &&
-          "name" in node &&
-          typeof node.name === "string" &&
-          Object.hasOwn(scope, node.name)
-            ? new ConstantNode(scope[node.name])
-            : node,
-        )
-        .toString(),
-    )
-    .join("=");
+  const expression = mapSides(request.expression, (side) =>
+    parse(side)
+      .transform((node) =>
+        node.type === "SymbolNode" &&
+        "name" in node &&
+        typeof node.name === "string" &&
+        Object.hasOwn(scope, node.name)
+          ? new ConstantNode(scope[node.name])
+          : node,
+      )
+      .toString(),
+  );
   return request.operation ? `${request.operation}(${expression})` : expression;
 }
 
 export function visualInputParameters(input: string): VisualParameter[] {
   const parameters = new Set<VisualParameter>();
-  for (const side of mathRequest(input).expression.split("="))
+  mapSides(mathRequest(input).expression, (side) => {
     parse(side).traverse((node) => {
       if (
         node.type === "SymbolNode" &&
@@ -67,6 +87,8 @@ export function visualInputParameters(input: string): VisualParameter[] {
       )
         parameters.add(node.name as VisualParameter);
     });
+    return side;
+  });
   return [...parameters];
 }
 
@@ -103,6 +125,178 @@ export function prepareWorkspaceVisual(
       throw new Error("المعطيات يجب أن تكون أعدادًا حقيقية منتهية.");
     return value;
   };
+  const readBound = (text: string) => infiniteBound(text) ?? readValue(text);
+  const branches = expandPlusMinus(source);
+  if (branches) {
+    const [plus, minus] = branches.map((branch) =>
+      prepareWorkspaceVisual(branch, scope),
+    );
+    const single = (visual: WorkspaceVisual) =>
+      visual.expressions.length === 2
+        ? [`(${visual.expressions[0]})-(${visual.expressions[1]})`]
+        : visual.expressions;
+    return {
+      ...base,
+      expressions: single(plus),
+      alternate: single(minus)[0],
+      points: [...plus.points, ...minus.points],
+      segments: [...plus.segments, ...minus.segments],
+      parameters: [...new Set([...plus.parameters, ...minus.parameters])],
+      kind: "حالتا ±",
+      description: `الحالة + (${branches[0]}) والحالة − (${branches[1]}) مرسومتان معًا. ${plus.description}`,
+    };
+  }
+  if (/<|>|!=|≤|≥|≠/.test(source)) {
+    const inequality = solveInequality(resolveVisualInput(source, scope));
+    if (inequality) {
+      base.parameters = visualInputParameters(source);
+      const low = Math.min(-8, ...inequality.roots.map((root) => root - 2)),
+        high = Math.max(8, ...inequality.roots.map((root) => root + 2));
+      const color = "#249b8d";
+      const segments: VisualSegment[] = [];
+      const points: VisualPoint[] = inequality.roots.map((root) => ({
+        x: root,
+        y: 0,
+        label: `x = ${fmt(root)}`,
+      }));
+      for (const interval of inequality.intervals) {
+        if (interval.from === interval.to) continue;
+        const from = Math.max(low, interval.from),
+          to = Math.min(high, interval.to);
+        if (interval.from === -Infinity && interval.to === Infinity) {
+          segments.push(
+            { from: { x: 0, y: 0 }, to: { x: high, y: 0 }, color, arrow: true },
+            { from: { x: 0, y: 0 }, to: { x: low, y: 0 }, color, arrow: true },
+          );
+        } else if (interval.from === -Infinity)
+          segments.push({ from: { x: to, y: 0 }, to: { x: from, y: 0 }, color, arrow: true });
+        else
+          segments.push({
+            from: { x: from, y: 0 },
+            to: { x: to, y: 0 },
+            color,
+            arrow: interval.to === Infinity,
+          });
+      }
+      return {
+        ...base,
+        expressions: [inequality.expression],
+        points,
+        segments,
+        kind: "متباينة",
+        description: `الحل: x ∈ ${inequality.text}. المنحنى هو الطرف الأيسر ناقص الأيمن، والخطوط الخضراء على محور x هي الفترات المحققة؛ السهم يعني أن الفترة تستمر بلا نهاية.`,
+      };
+    }
+  }
+  const limit = limitRequest(source);
+  if (limit) {
+    const target = readBound(limit.target);
+    const prepared = prepareVisualExpression(limit.expression, scope);
+    const result = evaluateLimit(limit.expression, target, scope, [
+      "x",
+      ...visualParameters,
+    ]);
+    const value = result.value;
+    const exists = result.status === "exists";
+    const segments: VisualSegment[] = [];
+    const points: VisualPoint[] = [];
+    if (exists && Number.isFinite(target) && Number.isFinite(value)) {
+      points.push({ x: target, y: value, label: `L = ${result.exact ?? fmt(value)}` });
+      segments.push({ from: { x: target, y: 0 }, to: { x: target, y: value } });
+    } else if (exists && Number.isFinite(value))
+      segments.push({ from: { x: -8, y: value }, to: { x: 8, y: value } });
+    else if (Number.isFinite(target))
+      segments.push({ from: { x: target, y: -8 }, to: { x: target, y: 8 } });
+    return {
+      ...base,
+      expressions: prepared.expressions,
+      parameters: [...new Set([...base.parameters, ...prepared.parameters])],
+      points,
+      segments,
+      kind: "نهاية",
+      description: exists
+        ? `عندما x → ${fmtValue(target)} تقترب الدالة من ${result.exact ?? fmtValue(value)}${result.exact ? "" : " (تقريب عددي)"}.`
+        : result.status === "differs"
+          ? `النهاية عند x = ${fmtValue(target)} غير موجودة: يسار ${fmtValue(result.left ?? NaN)}، يمين ${fmtValue(result.right ?? NaN)}.`
+          : `لم تستقر قيم الدالة قرب x = ${fmtValue(target)}؛ لا نعلن قيمة للنهاية.`,
+    };
+  }
+  const series = sumRequest(source);
+  if (series) {
+    const from = readValue(series.from),
+      to = readBound(series.to);
+    const result = evaluateSum(series.expression, series.variable, from, to, scope);
+    const curve = parse(series.expression)
+      .transform((node) =>
+        node.type === "SymbolNode" &&
+        "name" in node &&
+        node.name === series.variable
+          ? new SymbolNode("x")
+          : node,
+      )
+      .toString();
+    let expressions: string[] = [];
+    try {
+      expressions = prepareVisualExpression(curve, scope).expressions;
+    } catch {
+      expressions = [];
+    }
+    return {
+      ...base,
+      expressions,
+      points: result.terms.map((term, index) => ({
+        x: term.index,
+        y: term.value,
+        ...(index ? {} : { label: `${series.variable} = ${fmt(term.index)}` }),
+      })),
+      segments: result.terms.map((term) => ({
+        from: { x: term.index, y: 0 },
+        to: { x: term.index, y: term.value },
+      })),
+      kind: "مجموع",
+      description: `الأعمدة هي حدود المجموع عند القيم الصحيحة. ${
+        result.status === "exact"
+          ? `المجموع = ${fmt(result.value)}.`
+          : result.status === "converges"
+            ? `المجموع ≈ ${fmt(result.value)}.`
+            : result.status === "diverges"
+              ? "المتسلسلة متباعدة."
+              : "المجاميع الجزئية لم تستقر؛ لا نجزم بالتقارب."
+      }`,
+    };
+  }
+  const definite = definiteIntegralRequest(source);
+  if (definite) {
+    const from = readBound(definite.from),
+      to = readBound(definite.to);
+    const prepared = prepareVisualExpression(definite.expression, scope);
+    const result = definiteIntegral(definite.expression, from, to, scope, [
+      "x",
+      ...visualParameters,
+    ]);
+    const evaluate = compileFunction(definite.expression);
+    const finiteBounds = [from, to].filter(Number.isFinite);
+    const exact = Boolean(result.antiderivative);
+    return {
+      ...base,
+      expressions: prepared.expressions,
+      parameters: [...new Set([...base.parameters, ...prepared.parameters])],
+      points: finiteBounds.map((x) => ({ x, y: 0, label: `x = ${fmt(x)}` })),
+      segments: finiteBounds.map((x) => ({
+        from: { x, y: 0 },
+        to: { x, y: evaluate(x, scope) },
+      })),
+      area: {
+        from: Math.max(-20, Math.min(20, from)),
+        to: Math.max(-20, Math.min(20, to)),
+        expression: definite.expression,
+      },
+      kind: result.improper ? "تكامل معتل" : "تكامل محدد",
+      description: Number.isFinite(result.value)
+        ? `المساحة الموقّعة من x = ${fmtValue(from)} إلى x = ${fmtValue(to)} ${exact ? "=" : "≈"} ${fmt(result.value)}. المناطق تحت محور x تُحسب سالبة${exact ? "" : "؛ القيمة تقريب عددي"}${result.improper ? "؛ التظليل مقصوص عند ±20" : ""}.`
+        : `التكامل متباعد (${fmtValue(result.value)}): المساحة لا تستقر عند عدد منته.`,
+    };
+  }
   const parsed =
     !source.includes("=") && !mathRequest(source).operation
       ? parse(source)

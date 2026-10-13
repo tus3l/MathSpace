@@ -6,6 +6,7 @@ import { recommendQuadratic } from "./advisor";
 import { explainStep } from "./explanation";
 import type { ExplainedStep } from "./explanation";
 import { explainCalculus, explainDerivative } from "./calculusSteps";
+import { analyzeExtended } from "./extended";
 
 export type Step = ExplainedStep;
 export type Analysis = {
@@ -169,6 +170,17 @@ function polynomial(node: MathNode): Polynomial {
   if (typed.type === "ParenthesisNode") return polynomial(typed.content);
   if (typed.type === "ConstantNode") return [Number(typed.value), 0, 0];
   if (typed.type === "SymbolNode" && typed.name === "x") return [0, 1, 0];
+  if (
+    !node.filter(
+      (child) =>
+        child.type === "SymbolNode" &&
+        (child as unknown as { name: string }).name === "x",
+    ).length
+  ) {
+    const value: unknown = node.compile().evaluate();
+    if (typeof value === "number" && Number.isFinite(value))
+      return [value, 0, 0];
+  }
   if (typed.type !== "OperatorNode") throw new Error("not polynomial");
   const left = polynomial(typed.args[0]);
   if (typed.args.length === 1)
@@ -234,6 +246,8 @@ export function analyze(input: string): Analysis {
     related: ["functions"],
   };
   try {
+    const extended = analyzeExtended(input, base);
+    if (extended) return extended;
     const request = mathRequest(input);
     if (request.operation) {
       safeParse(request.expression, ["x"]);
@@ -465,14 +479,17 @@ export function analyze(input: string): Analysis {
         );
     }
     return base;
-  } catch {
+  } catch (failure) {
+    const reason =
+      failure instanceof Error && /[\u0600-\u06ff]/.test(failure.message)
+        ? `${failure.message} `
+        : "";
     return {
       ...base,
       supported: false,
       kind: "مسألة خارج نطاق التحليل الحالي",
       method: "لم أستطع تحديد طريقة واحدة مناسبة لهذه المسألة.",
-      methodReason:
-        "المحلل التعليمي الحالي يدعم المعادلات الخطية والتربيعية في x والدوال الحقيقية في متغير واحد. لا يتم توليد خطوات غير متحقق منها.",
+      methodReason: `${reason}المحلل التعليمي يدعم المعادلات والمتباينات الخطية والتربيعية في x، والدوال الحقيقية، والمشتقات والتكاملات والنهايات والمجاميع. لا يتم توليد خطوات غير متحقق منها.`,
       result: "جرّب معادلة خطية أو تربيعية، أو افتح موضوعًا مرتبطًا.",
       related: ["functions", "quadratic", "derivative"],
     };

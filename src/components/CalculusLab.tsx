@@ -14,6 +14,12 @@ import { LearningPanel } from "./LearningPanel";
 import { SignSummary } from "./SignSummary";
 import { compileFunction, fmt, normalize } from "../engine/math";
 import {
+  boundValue,
+  definiteIntegralRequest,
+  limitRequest,
+  sumRequest,
+} from "../engine/extended";
+import {
   explainDerivative,
   explainIntegral,
   piLabel,
@@ -238,6 +244,23 @@ export function CalculusLab() {
             onSubmit={(event) => {
               event.preventDefault();
               try {
+                const definite = definiteIntegralRequest(input);
+                const limit = definite ? null : limitRequest(input);
+                if (definite || limit) {
+                  if (definite) {
+                    setFrom(boundValue(definite.from));
+                    setTo(boundValue(definite.to));
+                  } else setPoint(boundValue(limit!.target));
+                  setMode(definite ? "integral" : "limits");
+                  setPlaying(false);
+                  setInput((definite ?? limit)!.expression);
+                  setExpression((definite ?? limit)!.expression);
+                  setError("");
+                  setPreview(null);
+                  return;
+                }
+                if (sumRequest(input))
+                  throw new Error("المجاميع تُحسب وتُرسم في مساحة العمل.");
                 if (!partial && /\by\b/.test(normalize(input)))
                   throw new Error(
                     "الدالة تحتوي y؛ استخدم تبويب الاشتقاق الجزئي لدوال المتغيرين.",

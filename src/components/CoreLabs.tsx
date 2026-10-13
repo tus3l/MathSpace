@@ -879,14 +879,24 @@ export function FreeGeometryWorkspace() {
               .map((equation) => equation.id)
               .join(",")}
             scope={scope}
+            rectangles={(() => {
+              const area =
+                visuals.find((item) => item.equation.id === selected?.id)
+                  ?.visual?.area ??
+                visuals.find((item) => item.visual?.area)?.visual?.area;
+              return area ? { count: 64, ...area } : undefined;
+            })()}
             curves={visuals
               .flatMap(
                 ({ equation, visual }) =>
-                  visual?.expressions.map((expression) => ({
+                  [
+                    ...(visual?.expressions ?? []),
+                    ...(visual?.alternate ? [visual.alternate] : []),
+                  ].map((expression) => ({
                     expression,
                     color: equation.color,
                     label: equation.expression,
-                  })) ?? [],
+                  })),
               )
               .concat(
                 previewVisual?.expressions.map((expression) => ({

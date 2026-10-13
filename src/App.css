@@ -45,14 +45,6 @@
 .workspace-examples {
   margin-block: 12px;
 }
-.math-notation-notice {
-  color: var(--subtle);
-  font-size: 12px;
-  line-height: 1.8;
-  margin-block: 8px;
-  padding-inline-start: 10px;
-  border-inline-start: 3px solid #e28e4e;
-}
 .workspace-examples > summary {
   display: flex;
   align-items: center;
