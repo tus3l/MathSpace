@@ -111,7 +111,7 @@ const navigation: Navigation[] = [
   },
   {
     id: "three",
-    title: "معمل ثلاثي الأبعاد",
+    title: "معمل رسومات الأبعاد",
     english: "3D Math Lab",
     icon: Box,
     color: "#358ec5",
@@ -328,10 +328,10 @@ export default function App() {
           <img
             className="brand-logo"
             src="/logo.png"
-            alt="شعار تخيل فضاء الرياضيات"
+            alt="شعار مختبر فضاء الرياضيات"
           />
           <span>
-            <strong>تخيل فضاء الرياضيات</strong>
+            <strong>مختبر فضاء الرياضيات</strong>
             <small>MATH SPACE</small>
           </span>
         </button>
@@ -467,7 +467,7 @@ export default function App() {
         </header>
         <main className="main-content">{body}</main>
         <footer className="app-footer">
-          <span>تخيل فضاء الرياضيات</span>
+          <span>مختبر فضاء الرياضيات</span>
           <span>ليس الناتج فقط. السبب أيضًا.</span>
           <span dir="ltr">MATH SPACE · LOCAL FIRST</span>
         </footer>
@@ -524,7 +524,7 @@ function Home({
       <div className="page-heading">
         <div>
           <div className="eyebrow">YOUR MATHEMATICAL SPACE</div>
-          <h1>تخيل فضاء الرياضيات</h1>
+          <h1>مختبر فضاء الرياضيات</h1>
           <p className="page-subtitle">
             مساحة العمل والمختبرات والمفاهيم المحفوظة
           </p>
