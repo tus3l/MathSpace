@@ -1,16 +1,21 @@
 import { useEffect, useLayoutEffect, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
+import katex from "katex";
 import {
   ArrowLeft,
+  BookOpen,
+  Box,
   Check,
   Eye,
   EyeOff,
   IdCard,
   KeyRound,
+  ListChecks,
   LoaderCircle,
   LockKeyhole,
   LogOut,
   ShieldCheck,
+  Sparkles,
 } from "lucide-react";
 import App from "../App";
 import { AdminDashboard } from "./AdminDashboard";
@@ -98,26 +103,85 @@ export function AuthGate() {
   );
 }
 
+const heroFormulas = [
+  "\\int_a^b f(x)\\,dx",
+  "e^{i\\pi} + 1 = 0",
+  "\\nabla \\cdot \\mathbf{F}",
+  "\\sum_{n=1}^{\\infty} \\frac{1}{n^2} = \\frac{\\pi^2}{6}",
+  "\\lim_{x \\to 0} \\frac{\\sin x}{x} = 1",
+].map((tex) => katex.renderToString(tex, { throwOnError: false, output: "html" }));
+const curve = "M0 230 C 75 130, 150 130, 225 230 S 375 330, 450 230 S 560 150, 600 190";
+
 function AuthShell({ children }: { children: ReactNode }) {
   return (
     <div className="auth-page">
       <section className="auth-hero" aria-hidden="true">
+        <div className="auth-aurora a" />
+        <div className="auth-aurora b" />
+        <div className="auth-stars" />
         <div className="auth-grid" />
         <div className="auth-orbit auth-orbit-a" />
         <div className="auth-orbit auth-orbit-b" />
-        <span className="auth-formula f1" dir="ltr">∫ f(x) dx</span>
-        <span className="auth-formula f2" dir="ltr">e^(iπ) + 1 = 0</span>
-        <span className="auth-formula f3" dir="ltr">∇ · F</span>
-        <span className="auth-formula f4" dir="ltr">Σ 1/n²</span>
-        <span className="auth-formula f5" dir="ltr">lim x→0</span>
-        <svg className="auth-wave" viewBox="0 0 600 200" preserveAspectRatio="none">
-          <path d="M0 100 C 75 10, 150 10, 225 100 S 375 190, 450 100 S 560 20, 600 60" />
-          <path d="M0 130 C 90 60, 160 60, 250 130 S 400 200, 480 120 S 570 80, 600 100" />
+        <svg className="auth-plot" viewBox="0 0 600 400" preserveAspectRatio="xMidYMid slice">
+          <defs>
+            <linearGradient id="auth-area" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="#a49bec" stopOpacity="0.28" />
+              <stop offset="1" stopColor="#a49bec" stopOpacity="0" />
+            </linearGradient>
+            <linearGradient id="auth-stroke" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0" stopColor="#3fd0bd" />
+              <stop offset="0.5" stopColor="#a49bec" />
+              <stop offset="1" stopColor="#f0a26a" />
+            </linearGradient>
+            <filter id="auth-glow" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="4" />
+            </filter>
+          </defs>
+          <line className="auth-axis" x1="0" y1="230" x2="600" y2="230" />
+          <line className="auth-axis" x1="300" y1="20" x2="300" y2="400" />
+          <path className="auth-area" d={`${curve} L600 400 L0 400 Z`} />
+          <path className="auth-curve-2" d="M0 270 C 90 200, 160 200, 250 270 S 400 340, 480 260 S 570 220, 600 240" />
+          <path className="auth-curve-glow" d={curve} filter="url(#auth-glow)" />
+          <path className="auth-curve" d={curve} pathLength={1} />
+          <circle r="11" className="auth-tracer-halo">
+            <animateMotion dur="9s" repeatCount="indefinite" path={curve} />
+          </circle>
+          <circle r="4.5" className="auth-tracer">
+            <animateMotion dur="9s" repeatCount="indefinite" path={curve} />
+          </circle>
         </svg>
+        {heroFormulas.map((html, index) => (
+          <span
+            key={index}
+            className={`auth-formula f${index + 1}`}
+            dir="ltr"
+            dangerouslySetInnerHTML={{ __html: html }}
+          />
+        ))}
         <div className="auth-hero-text">
-          <img src="/logo.png" alt="" />
-          <h1>مختبر فضاء الرياضيات</h1>
+          <span className="auth-tag">
+            <Sparkles size={13} />
+            منصة رياضية تفاعلية
+          </span>
+          <div className="auth-title">
+            <img src="/logo.png" alt="" />
+            <h1>مختبر فضاء الرياضيات</h1>
+          </div>
           <p>ليس الناتج فقط. السبب أيضًا.</p>
+          <ul className="auth-features">
+            <li>
+              <ListChecks size={15} />
+              حلول مشروحة خطوة بخطوة
+            </li>
+            <li>
+              <Box size={15} />
+              رسوم ثنائية وثلاثية الأبعاد
+            </li>
+            <li>
+              <BookOpen size={15} />
+              مكتبة قوانين شاملة
+            </li>
+          </ul>
         </div>
       </section>
       <section className="auth-panel">
