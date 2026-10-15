@@ -26,6 +26,8 @@ import {
   ChevronLeft,
   CircleHelp,
   Check,
+  LogOut,
+  ShieldCheck,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Workspace } from "./components/Workspace";
@@ -50,6 +52,7 @@ import { Graph } from "./components/Graph";
 import { searchTopics, topics } from "./content/knowledge";
 import type { View } from "./content/knowledge";
 import { useLocal } from "./hooks/useLocal";
+import type { Account } from "./auth/api";
 import "./App.css";
 
 const ThreeLab = lazy(() => import("./components/ThreeLab"));
@@ -189,7 +192,15 @@ const libraryNavigation = navigation.filter(
     !["library", "practice"].includes(item.id) &&
     !sidebarViews.includes(item.id),
 );
-export default function App() {
+export default function App({
+  account,
+  onLogout,
+  onAdmin,
+}: {
+  account: Account;
+  onLogout: () => void;
+  onAdmin?: () => void;
+}) {
   const [view, setView] = useState<View>("workspace"),
     [drawer, setDrawer] = useState(false),
     [query, setQuery] = useState(""),
@@ -462,7 +473,28 @@ export default function App() {
             >
               <CircleHelp size={18} />
             </button>
-            <div className="profile-mark">م</div>
+            {onAdmin && (
+              <button
+                title="لوحة التحكم"
+                aria-label="لوحة التحكم"
+                onClick={onAdmin}
+              >
+                <ShieldCheck size={18} />
+              </button>
+            )}
+            <button
+              title="تسجيل الخروج"
+              aria-label="تسجيل الخروج"
+              onClick={onLogout}
+            >
+              <LogOut size={18} />
+            </button>
+            <div
+              className="profile-mark"
+              title={account.name ? `${account.name} · ${account.id}` : account.id}
+            >
+              {account.name?.trim().charAt(0) || "م"}
+            </div>
           </div>
         </header>
         <main className="main-content">{body}</main>
