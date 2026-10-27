@@ -166,6 +166,8 @@ const heroFormulas = [
   "\\lim_{x \\to 0} \\frac{\\sin x}{x} = 1",
 ].map((tex) => katex.renderToString(tex, { throwOnError: false, output: "html" }));
 const curve = "M0 230 C 75 130, 150 130, 225 230 S 375 330, 450 230 S 560 150, 600 190";
+const infinity =
+  "M50 25 C 62 8, 90 8, 90 25 C 90 42, 62 42, 50 25 C 38 8, 10 8, 10 25 C 10 42, 38 42, 50 25 Z";
 
 function AuthShell({ children }: { children: ReactNode }) {
   return (
@@ -219,7 +221,23 @@ function AuthShell({ children }: { children: ReactNode }) {
             منصة رياضية تفاعلية
           </span>
           <div className="auth-title">
-            <img src="/logo.png" alt="" />
+            <span className="auth-mark" dir="ltr">
+              <img src="/loginlogo.png" alt="" />
+              <svg className="auth-infinity" viewBox="0 0 100 50">
+                <defs>
+                  <linearGradient id="auth-gold" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0" stopColor="#f8dc8a" />
+                    <stop offset="0.5" stopColor="#d39a34" />
+                    <stop offset="1" stopColor="#9a6418" />
+                  </linearGradient>
+                </defs>
+                <path className="auth-infinity-base" d={infinity} />
+                <path className="auth-infinity-flow" d={infinity} pathLength={1} />
+                <circle r="3.2" className="auth-infinity-dot">
+                  <animateMotion dur="3.2s" repeatCount="indefinite" path={infinity} />
+                </circle>
+              </svg>
+            </span>
             <h1>مختبر فضاء الرياضيات</h1>
           </div>
           <p>ليس الناتج فقط. السبب أيضًا.</p>
