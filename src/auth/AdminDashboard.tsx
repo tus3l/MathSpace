@@ -22,13 +22,20 @@ import {
   deleteAccount,
   listAccounts,
   resetPassword,
+  setAccountStatus,
 } from "./api";
-import type { Account, Credentials, MemberRow } from "./api";
+import type { Account, AccountStatus, Credentials, MemberRow } from "./api";
 
 const dateFormat = new Intl.DateTimeFormat("ar", {
   dateStyle: "medium",
   timeStyle: "short",
 });
+const statusLabels: Record<AccountStatus, string> = {
+  active: "نشط",
+  frozen: "مجمّد",
+  suspended: "موقوف",
+  banned: "محظور",
+};
 
 export function AdminDashboard({
   account,
@@ -102,6 +109,27 @@ export function AdminDashboard({
     setBusyId(row.id);
     try {
       await deleteAccount(row.id);
+      await refresh();
+    } catch (caught) {
+      setError((caught as Error).message);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function changeStatus(row: MemberRow, status: AccountStatus) {
+    if (status === row.status) return;
+    let reason = "";
+    if (status !== "active") {
+      const answer = prompt(`سبب ${statusLabels[status]} الحساب ${row.id}:`, row.statusReason ?? "");
+      if (answer === null) return;
+      reason = answer.trim();
+      if (!reason) return setError("اكتب سبب الإجراء.");
+    } else if (!confirm(`إعادة تفعيل الحساب ${row.id}؟`)) return;
+    setBusyId(row.id);
+    setError("");
+    try {
+      await setAccountStatus(row.id, status, reason);
       await refresh();
     } catch (caught) {
       setError((caught as Error).message);
@@ -200,6 +228,7 @@ export function AdminDashboard({
                   <th>رقم ID</th>
                   <th>الاسم</th>
                   <th>الحالة</th>
+                  <th>الجلسة النشطة</th>
                   <th>تاريخ الإنشاء</th>
                   <th>آخر دخول</th>
                   <th />
@@ -211,7 +240,11 @@ export function AdminDashboard({
                     <td className="mono" dir="ltr">{row.id}</td>
                     <td>{row.name || <span className="muted">—</span>}</td>
                     <td>
-                      {row.locked ? (
+                      {row.status && row.status !== "active" ? (
+                        <span className="pill red" title={row.statusReason ?? undefined}>
+                          {statusLabels[row.status]}
+                        </span>
+                      ) : row.locked ? (
                         <span className="pill red">مقفل مؤقتًا</span>
                       ) : row.mustChangePassword ? (
                         <span className="pill orange">بانتظار التفعيل</span>
@@ -219,11 +252,35 @@ export function AdminDashboard({
                         <span className="pill green">مفعّل</span>
                       )}
                     </td>
+                    <td className="muted">
+                      {row.activeSession ? (
+                        <span title={`منذ ${dateFormat.format(new Date(row.activeSession.createdAt))}`}>
+                          {row.activeSession.deviceLabel ?? "جهاز"} ·{" "}
+                          {dateFormat.format(new Date(row.activeSession.lastActivity))}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
                     <td className="muted">{dateFormat.format(new Date(row.createdAt))}</td>
                     <td className="muted">
                       {row.lastLoginAt ? dateFormat.format(new Date(row.lastLoginAt)) : "لم يدخل بعد"}
                     </td>
                     <td className="admin-row-actions">
+                      <select
+                        className="admin-status-select"
+                        aria-label="حالة الحساب"
+                        title="حالة الحساب"
+                        value={row.status ?? "active"}
+                        disabled={busyId === row.id}
+                        onChange={(event) => changeStatus(row, event.target.value as AccountStatus)}
+                      >
+                        {(Object.keys(statusLabels) as AccountStatus[]).map((status) => (
+                          <option key={status} value={status}>
+                            {statusLabels[status]}
+                          </option>
+                        ))}
+                      </select>
                       <button
                         className="admin-icon"
                         title="إعادة تعيين الرمز"

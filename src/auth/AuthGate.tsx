@@ -3,6 +3,7 @@ import type { FormEvent, ReactNode } from "react";
 import katex from "katex";
 import {
   ArrowLeft,
+  Ban,
   BookOpen,
   Box,
   Check,
@@ -14,24 +15,35 @@ import {
   LoaderCircle,
   LockKeyhole,
   LogOut,
+  MonitorSmartphone,
+  PauseCircle,
   ShieldCheck,
+  Snowflake,
   Sparkles,
 } from "lucide-react";
 import App from "../App";
 import { AdminDashboard } from "./AdminDashboard";
 import {
+  AuthError,
   authConfigured,
   changePassword,
+  checkSession,
+  dismissSessionEnd,
   login,
   logout,
+  onSessionEnded,
+  pendingSessionEnd,
   restoreSession,
 } from "./api";
-import type { Account } from "./api";
+import type { Account, SessionEnd } from "./api";
 import "./auth.css";
+
+const SESSION_CHECK_MS = 15_000;
 
 export function AuthGate() {
   const [account, setAccount] = useState<Account | null>(null),
     [ready, setReady] = useState(false),
+    [ended, setEnded] = useState<SessionEnd | null>(pendingSessionEnd),
     [adminView, setAdminView] = useState<"dashboard" | "app">("dashboard");
   useLayoutEffect(() => {
     let theme = "dark";
@@ -46,15 +58,47 @@ export function AuthGate() {
   }, []);
   useEffect(() => {
     let active = true;
-    restoreSession().then((restored) => {
-      if (!active) return;
-      setAccount(restored);
-      setReady(true);
-    });
+    restoreSession()
+      .then((restored) => active && setAccount(restored))
+      .catch((caught: AuthError) => active && setEnded(caught.sessionEnd))
+      .finally(() => active && setReady(true));
     return () => {
       active = false;
     };
   }, []);
+  // Any backend rejection (from polling or from a protected call) ends the session in the UI.
+  useEffect(
+    () =>
+      onSessionEnded((end) => {
+        setAccount(null);
+        setAdminView("dashboard");
+        if (end) setEnded(end);
+      }),
+    [],
+  );
+  const signedIn = account !== null;
+  useEffect(() => {
+    if (!signedIn) return;
+    let busy = false;
+    const verify = () => {
+      if (busy || document.visibilityState === "hidden") return;
+      busy = true;
+      checkSession()
+        .then((fresh) => fresh && setAccount(fresh))
+        .catch(() => undefined) // Network errors keep the UI; rejections are handled by onSessionEnded.
+        .finally(() => (busy = false));
+    };
+    const timer = window.setInterval(verify, SESSION_CHECK_MS);
+    window.addEventListener("focus", verify);
+    window.addEventListener("online", verify);
+    document.addEventListener("visibilitychange", verify);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", verify);
+      window.removeEventListener("online", verify);
+      document.removeEventListener("visibilitychange", verify);
+    };
+  }, [signedIn]);
   async function signOut() {
     await logout().catch(() => undefined);
     setAccount(null);
@@ -67,6 +111,16 @@ export function AuthGate() {
         <LoaderCircle className="auth-spin" size={28} />
       </div>
     );
+  if (ended)
+    return (
+      <SessionEndedPage
+        end={ended}
+        onBack={() => {
+          dismissSessionEnd();
+          setEnded(null);
+        }}
+      />
+    );
   if (!account)
     return (
       <LoginPage
@@ -74,6 +128,7 @@ export function AuthGate() {
           setAccount(next);
           setAdminView("dashboard");
         }}
+        onBlocked={setEnded}
       />
     );
   if (account.mustChangePassword)
@@ -232,7 +287,13 @@ function PasswordInput({
   );
 }
 
-function LoginPage({ onLogin }: { onLogin: (account: Account) => void }) {
+function LoginPage({
+  onLogin,
+  onBlocked,
+}: {
+  onLogin: (account: Account) => void;
+  onBlocked: (end: SessionEnd) => void;
+}) {
   const [id, setId] = useState(""),
     [password, setPassword] = useState(""),
     [error, setError] = useState(""),
@@ -244,6 +305,7 @@ function LoginPage({ onLogin }: { onLogin: (account: Account) => void }) {
     try {
       onLogin(await login(id, password));
     } catch (caught) {
+      if (caught instanceof AuthError && caught.sessionEnd) return onBlocked(caught.sessionEnd);
       setError((caught as Error).message);
       setBusy(false);
     }
@@ -296,6 +358,50 @@ function LoginPage({ onLogin }: { onLogin: (account: Account) => void }) {
         <ShieldCheck size={15} />
         لا يوجد تسجيل حساب جديد؛ الحسابات تُنشأ من المشرف فقط.
       </p>
+    </AuthShell>
+  );
+}
+
+const sessionEndCopy: Record<
+  SessionEnd["code"],
+  { title: string; icon: ReactNode; fallback: string }
+> = {
+  session_replaced: {
+    title: "تم طردك!",
+    icon: <MonitorSmartphone size={20} />,
+    fallback: "تم تسجيل الدخول من جهاز آخر على نفس الحساب.",
+  },
+  account_frozen: {
+    title: "تم تجميد حسابك!",
+    icon: <Snowflake size={20} />,
+    fallback: "لم يُذكر سبب.",
+  },
+  account_suspended: {
+    title: "تم إيقاف حسابك!",
+    icon: <PauseCircle size={20} />,
+    fallback: "لم يُذكر سبب.",
+  },
+  account_banned: {
+    title: "تم حظر حسابك!",
+    icon: <Ban size={20} />,
+    fallback: "لم يُذكر سبب.",
+  },
+};
+
+function SessionEndedPage({ end, onBack }: { end: SessionEnd; onBack: () => void }) {
+  const copy = sessionEndCopy[end.code] ?? sessionEndCopy.session_replaced;
+  const reason = end.code === "session_replaced" ? copy.fallback : end.reason?.trim() || copy.fallback;
+  return (
+    <AuthShell>
+      <div className="auth-badge danger">{copy.icon}</div>
+      <h2>{copy.title}</h2>
+      <div className="auth-reason" role="alert">
+        <strong>السبب:</strong>
+        <p>{reason}</p>
+      </div>
+      <button className="auth-submit" onClick={onBack}>
+        العودة إلى تسجيل الدخول <ArrowLeft size={17} />
+      </button>
     </AuthShell>
   );
 }

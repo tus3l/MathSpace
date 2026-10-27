@@ -409,6 +409,29 @@
   font-size: 13px;
   line-height: 1.7;
 }
+.auth-badge.danger {
+  background: #d8687e1a;
+  color: #e07d91;
+  border-color: #d8687e44;
+}
+.auth-reason {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #d8687e12;
+  border: 1px solid #d8687e3a;
+  font-size: 14px;
+  line-height: 1.8;
+  margin: 6px 0 4px;
+}
+.auth-reason strong {
+  color: #e07d91;
+}
+.auth-reason p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .auth-note {
   display: flex;
   align-items: center;
@@ -752,6 +775,20 @@
   display: flex;
   gap: 6px;
   justify-content: flex-end;
+}
+.admin-status-select {
+  height: 34px;
+  padding: 0 8px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--subtle);
+  font: inherit;
+  font-size: 12px;
+}
+.admin-status-select option {
+  background: var(--surface);
+  color: inherit;
 }
 .admin-empty {
   text-align: center;
