@@ -1,6 +1,5 @@
 import { useEffect, useLayoutEffect, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
-import katex from "katex";
 import {
   ArrowLeft,
   Ban,
@@ -158,96 +157,43 @@ export function AuthGate() {
   );
 }
 
-const heroFormulas = [
-  "\\int_a^b f(x)\\,dx",
-  "e^{i\\pi} + 1 = 0",
-  "\\nabla \\cdot \\mathbf{F}",
-  "\\sum_{n=1}^{\\infty} \\frac{1}{n^2} = \\frac{\\pi^2}{6}",
-  "\\lim_{x \\to 0} \\frac{\\sin x}{x} = 1",
-].map((tex) => katex.renderToString(tex, { throwOnError: false, output: "html" }));
-const curve = "M0 230 C 75 130, 150 130, 225 230 S 375 330, 450 230 S 560 150, 600 190";
 const infinity =
   "M50 25 C 62 8, 90 8, 90 25 C 90 42, 62 42, 50 25 C 38 8, 10 8, 10 25 C 10 42, 38 42, 50 25 Z";
-const infinityEquation = katex.renderToString("\\lim_{x \\to 0^{+}} \\frac{1}{x} =", {
-  throwOnError: false,
-  output: "html",
-});
 
 function AuthShell({ children }: { children: ReactNode }) {
   return (
     <div className="auth-page">
       <section className="auth-hero" aria-hidden="true">
-        <div className="auth-aurora a" />
-        <div className="auth-aurora b" />
-        <div className="auth-stars" />
-        <div className="auth-grid" />
-        <div className="auth-orbit auth-orbit-a" />
-        <div className="auth-orbit auth-orbit-b" />
-        <svg className="auth-plot" viewBox="0 0 600 400" preserveAspectRatio="xMidYMid slice">
-          <defs>
-            <linearGradient id="auth-area" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stopColor="#a49bec" stopOpacity="0.28" />
-              <stop offset="1" stopColor="#a49bec" stopOpacity="0" />
-            </linearGradient>
-            <linearGradient id="auth-stroke" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0" stopColor="#3fd0bd" />
-              <stop offset="0.5" stopColor="#a49bec" />
-              <stop offset="1" stopColor="#f0a26a" />
-            </linearGradient>
-            <filter id="auth-glow" x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur stdDeviation="4" />
-            </filter>
-          </defs>
-          <line className="auth-axis" x1="0" y1="230" x2="600" y2="230" />
-          <line className="auth-axis" x1="300" y1="20" x2="300" y2="400" />
-          <path className="auth-area" d={`${curve} L600 400 L0 400 Z`} />
-          <path className="auth-curve-2" d="M0 270 C 90 200, 160 200, 250 270 S 400 340, 480 260 S 570 220, 600 240" />
-          <path className="auth-curve-glow" d={curve} filter="url(#auth-glow)" />
-          <path className="auth-curve" d={curve} pathLength={1} />
-          <circle r="11" className="auth-tracer-halo">
-            <animateMotion dur="9s" repeatCount="indefinite" path={curve} />
-          </circle>
-          <circle r="4.5" className="auth-tracer">
-            <animateMotion dur="9s" repeatCount="indefinite" path={curve} />
-          </circle>
-        </svg>
-        {heroFormulas.map((html, index) => (
-          <span
-            key={index}
-            className={`auth-formula f${index + 1}`}
-            dir="ltr"
-            dangerouslySetInnerHTML={{ __html: html }}
-          />
-        ))}
         <div className="auth-hero-text">
-          <span className="auth-formula auth-infinity-eq" dir="ltr">
-            <span
-              className="auth-infinity-expr"
-              dangerouslySetInnerHTML={{ __html: infinityEquation }}
-            />
-          <svg className="auth-infinity" viewBox="0 0 100 50">
-            <path className="auth-infinity-base" d={infinity} />
-            {[0.2, 0.12, 0.05].map((len, i) => (
-              <path
-                key={len}
-                className={`auth-infinity-flow t${i}`}
-                d={infinity}
-                pathLength={1}
-                style={{ strokeDasharray: `${len} ${1 - len}` }}
-              />
-            ))}
-            <circle r="2.6" className="auth-infinity-dot">
-              <animateMotion dur="4s" begin="-0.8s" repeatCount="indefinite" path={infinity} />
-            </circle>
-          </svg>
-          </span>
           <span className="auth-tag">
             <Sparkles size={13} />
             منصة رياضية تفاعلية
           </span>
           <div className="auth-title">
             <span className="auth-mark" dir="ltr">
-              <img src="/logo.png" alt="" />
+              <img src="/loginlogo.png" alt="" />
+              <svg className="auth-infinity" viewBox="0 0 100 50">
+                <defs>
+                  <linearGradient id="auth-gold" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0" stopColor="#f8dc8a" />
+                    <stop offset="0.5" stopColor="#d39a34" />
+                    <stop offset="1" stopColor="#9a6418" />
+                  </linearGradient>
+                </defs>
+                <path className="auth-infinity-base" d={infinity} />
+                {[0.2, 0.12, 0.05].map((len, i) => (
+                  <path
+                    key={len}
+                    className={`auth-infinity-flow t${i}`}
+                    d={infinity}
+                    pathLength={1}
+                    style={{ strokeDasharray: `${len} ${1 - len}` }}
+                  />
+                ))}
+                <circle r="2.6" className="auth-infinity-dot">
+                  <animateMotion dur="4s" begin="-0.8s" repeatCount="indefinite" path={infinity} />
+                </circle>
+              </svg>
             </span>
             <h1>مختبر فضاء الرياضيات</h1>
           </div>
