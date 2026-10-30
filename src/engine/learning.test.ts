@@ -106,6 +106,26 @@ describe("advisor diagnosis of laws, applications and signs", () => {
     expect(tryLaw("sin(x)", "partial-y").valid).toBe(false);
   });
 
+  it("solves with a verified law when the chosen law does not apply", () => {
+    const attempt = tryLaw("x^2+5x+6=0", "plane-general");
+    expect(attempt.valid).toBe(true);
+    expect(attempt.lawId).toBe("quadratic");
+    expect(attempt.message).toContain("الصورة العامة للمستوى");
+    expect(attempt.message).toContain("المعادلة التربيعية");
+    expect(verifyFinal(attempt.source, "-2,-3", attempt).valid).toBe(true);
+    expect(suggestLaws("x^2+5x+6=0").map((item) => item.lawId)).not.toContain(
+      "pythagoras",
+    );
+  });
+
+  it("converts a plane equation to general form with its normal vector", () => {
+    const plane = tryLaw("z = 2x - y + 4", "plane-general");
+    expect(plane.valid).toBe(true);
+    expect(plane.output).toBe("2x-y-z+4=0");
+    expect(plane.message).toContain("(2, -1, -1)");
+    expect(tryLaw("x^2+y^2+z^2=1", "plane-general").valid).not.toBe(true);
+  });
+
   it("shows step-by-step calculus in the workspace analysis", () => {
     const derivative = analyze("derivative(cos(x))");
     expect(derivative.steps[0].reason).toContain("إشارة سالبة");

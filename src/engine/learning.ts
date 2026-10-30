@@ -284,7 +284,11 @@ export function verifyTransition(before: string, after: string): Verdict {
   }
 }
 
-export function tryLaw(source: string, lawId: string): LawAttempt {
+export function tryLaw(
+  source: string,
+  lawId: string,
+  allowSubstitute = true,
+): LawAttempt {
   const law = learningLaws.find((item) => item.id === lawId);
   const analysis = analyze(source);
   const base: LawAttempt = {
@@ -633,13 +637,54 @@ export function tryLaw(source: string, lawId: string): LawAttempt {
       applied.signNotes = explained.signNotes;
       return applied;
     }
-    if (lawId === "pythagoras")
-      return reject(
-        "يلزم إثبات وجود مثلث قائم وتحديد الضلعين والوتر، أو نقطتين لحساب المسافة. المعادلة وحدها لا تثبت هذه المعطيات؛ لا يمكن اعتماد فيثاغورس هنا.",
-        null,
-      );
+    if (["plane-general", "plane-normal"].includes(lawId)) {
+      const plane = planeCoefficients(source);
+      if (plane) {
+        const sign = Math.sign(plane.find((value) => value !== 0)!);
+        const [A, B, C, D] = plane.map((value) => value * sign || 0);
+        const term = (value: number, name: string) =>
+          value === 0 ? "" : `${value < 0 ? "-" : "+"}${Math.abs(value) === 1 ? "" : fmt(Math.abs(value))}${name}`;
+        const general =
+          `${term(A, "x")}${term(B, "y")}${term(C, "z")}${D === 0 ? "" : `${D < 0 ? "-" : "+"}${fmt(Math.abs(D))}`}`.replace(
+            /^\+/,
+            "",
+          ) + "=0";
+        const normal = `(${fmt(A)}, ${fmt(B)}, ${fmt(C)})`;
+        const reason = `المعادلة خطية في x وy وz ومعاملاتها ليست كلها صفرًا، إذن هي مستوى. المتجه العمودي n = ${normal}، والمسافة من الأصل |D|/‖n‖ = ${fmt(Math.abs(D) / Math.hypot(A, B, C))}.`;
+        const result = make(general, "", reason);
+        result.steps = [
+          {
+            before: source,
+            after: general,
+            operation: "نقل كل الحدود إلى طرف واحد",
+            rule: "توازن المعادلة",
+            reason: "نطرح الطرف الأيمن من الطرفين فنحصل على Ax+By+Cz+D=0.",
+          },
+          {
+            before: `A=${fmt(A)}, B=${fmt(B)}, C=${fmt(C)}, D=${fmt(D)}`,
+            after: `n=${normal}`,
+            operation: "قراءة المتجه العمودي",
+            rule: base.title,
+            reason,
+          },
+        ];
+        return result;
+      }
+    }
+    const unsupported =
+      lawId === "pythagoras"
+        ? "يلزم إثبات وجود مثلث قائم وتحديد الضلعين والوتر، أو نقطتين لحساب المسافة. المعادلة وحدها لا تثبت هذه المعطيات؛ لا يمكن اعتماد فيثاغورس هنا."
+        : `شروط «${law.title}»: ${law.condition} هذه الشروط غير متحققة في المسألة الحالية.`;
+    const substitute = allowSubstitute
+      ? suggestLaws(source, lawId)[0]
+      : undefined;
+    if (substitute)
+      return {
+        ...substitute,
+        message: `${unsupported} لذلك حُلّت المسألة بقانون تحققت شروطه: «${substitute.title}». ${substitute.message}`,
+      };
     return reject(
-      `شروط التطبيق: ${law.condition} لم تُثبت هذه المعطيات في المسألة الحالية؛ يمكن تسجيل المحاولة، لكن التطبيق الآلي لهذا القانون غير مدعوم هنا.`,
+      `${unsupported} لم يجد المحرك قانونًا بديلًا تتحقق شروطه آليًا لحلها.`,
       null,
     );
   } catch {
@@ -647,6 +692,39 @@ export function tryLaw(source: string, lawId: string): LawAttempt {
       "لم يتمكن المحرك من تطبيق هذا القانون على الصيغة الحالية. راجع المتغيرات والمجال والشروط؛ لا توجد نتيجة معتمدة لهذه المحاولة.",
       null,
     );
+  }
+}
+
+/** Returns [A,B,C,D] when the source is a linear equation in x, y, z that mentions z. */
+function planeCoefficients(source: string) {
+  const expression = normalize(source);
+  if (!/\bz\b|\dz\b/.test(expression)) return null;
+  const sides = expression.split("=");
+  if (sides.length !== 2 || sides.some((side) => !side.trim())) return null;
+  try {
+    const [left, right] = sides.map((side) => parse(side).compile());
+    const f = (x: number, y: number, z: number) => {
+      const value = Number(left.evaluate({ x, y, z })) - Number(right.evaluate({ x, y, z }));
+      return Number.isFinite(value) ? value : NaN;
+    };
+    const D = f(0, 0, 0);
+    const A = f(1, 0, 0) - D;
+    const B = f(0, 1, 0) - D;
+    const C = f(0, 0, 1) - D;
+    if (![A, B, C, D].every(Number.isFinite) || (A === 0 && B === 0 && C === 0))
+      return null;
+    for (const [x, y, z] of [
+      [1.7, -2.3, 0.9],
+      [-3.1, 0.4, 2.6],
+    ]) {
+      const expected = A * x + B * y + C * z + D;
+      if (Math.abs(f(x, y, z) - expected) > 1e-9 * Math.max(1, Math.abs(expected)))
+        return null;
+    }
+    const round = (value: number) => Math.round(value * 1e9) / 1e9;
+    return [A, B, C, D].map(round) as [number, number, number, number];
+  } catch {
+    return null;
   }
 }
 
@@ -729,7 +807,7 @@ export function suggestLaws(source: string, exclude?: string) {
     .includes("=");
   return candidateLaws
     .filter((id) => id !== exclude)
-    .map((id) => tryLaw(source, id))
+    .map((id) => tryLaw(source, id, false))
     .filter(
       (attempt) =>
         attempt.valid === true &&
