@@ -37,6 +37,11 @@
   display: grid;
   gap: 12px;
   justify-items: start;
+  padding: 26px 28px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #ffffff08, #ffffff02);
+  border: 1px solid #ffffff1a;
+  box-shadow: 0 30px 80px #00000066, inset 0 1px 0 #ffffff0f;
   max-width: 520px;
 }
 .auth-tag {
