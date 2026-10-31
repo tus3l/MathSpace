@@ -4,7 +4,6 @@ import {
   ChartNoAxesCombined,
   Lightbulb,
   Box,
-  Triangle,
   Sigma,
   MoveUpRight,
   Grid2X2,
@@ -33,7 +32,6 @@ import type { LucideIcon } from "lucide-react";
 import { Workspace } from "./components/Workspace";
 import {
   AdvisorLab,
-  GeometryLab,
   FreeGeometryWorkspace,
   PracticeLab,
   TrigLab,
@@ -97,13 +95,6 @@ const navigation: Navigation[] = [
     english: "Math Advisor",
     icon: Lightbulb,
     color: "#e28e4e",
-  },
-  {
-    id: "geometry",
-    title: "الهندسة",
-    english: "Geometry",
-    icon: Triangle,
-    color: "#249b8d",
   },
   {
     id: "calculus",
@@ -183,7 +174,7 @@ const navigation: Navigation[] = [
     color: "#249b8d",
   },
 ];
-const sidebarViews: View[] = ["free", "advisor", "geometry", "three"];
+const sidebarViews: View[] = ["free", "advisor", "three"];
 const sidebarNavigation = sidebarViews.map((id) =>
   navigation.find((item) => item.id === id)!,
 );
@@ -244,6 +235,7 @@ export default function App({
   function navigate(next: View) {
     if (["proof", "probability", "trigonometry"].includes(next))
       next = "workspace";
+    if (next === "geometry") next = "free";
     setView(next);
     setDrawer(false);
     setSearching(false);
@@ -290,8 +282,6 @@ export default function App({
         }}
         clearHistory={() => setHistory([])}
       />
-    ) : view === "geometry" ? (
-      <GeometryLab />
     ) : view === "free" ? (
       <FreeGeometryWorkspace />
     ) : view === "complex" ? (

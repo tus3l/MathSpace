@@ -1263,17 +1263,6 @@
   overflow-wrap: anywhere;
   direction: ltr;
 }
-.geometry-heading {
-  flex-wrap: wrap;
-  gap: 12px;
-}
-.geometry-heading .segmented {
-  flex-wrap: wrap;
-  max-width: 100%;
-}
-.free-geometry-layout {
-  grid-template-columns: minmax(0, 1fr);
-}
 .free-geometry {
   display: grid;
   gap: 12px;
@@ -1319,7 +1308,6 @@
 }
 
 .proof-stage,
-.geometry-stage,
 .circle-stage,
 .matrix-stage {
   background: var(--surface);
@@ -1328,7 +1316,6 @@
   overflow: hidden;
 }
 .proof-stage > svg,
-.geometry-stage > svg,
 .circle-stage > svg,
 .matrix-stage > svg {
   display: block;
@@ -2690,10 +2677,6 @@
   }
   .proof-stage > svg {
     min-height: 300px;
-  }
-  .geometry-stage > svg {
-    min-height: 240px;
-    touch-action: none;
   }
   .circle-stage > svg {
     min-height: 260px;

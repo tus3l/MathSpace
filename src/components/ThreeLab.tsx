@@ -536,9 +536,6 @@ export default function ThreeLab() {
                 }
                 values={{ ...scope, x: probe.x, y: probe.y }}
                 activity={[]}
-                running={false}
-                showAnimation={false}
-                onPlay={() => {}}
                 onReset={() => {}}
                 onShowSteps={() => {}}
                 onClearPreview={() => {}}

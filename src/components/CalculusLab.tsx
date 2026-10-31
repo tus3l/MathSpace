@@ -482,9 +482,6 @@ export function CalculusLab() {
                     : { x: point, h: delta }
               }
               activity={[]}
-              running={playing}
-              showAnimation={false}
-              onPlay={() => setPlaying(!playing)}
               onReset={() => setPreview(null)}
               onShowSteps={() => {}}
               onClearPreview={() => setPreview(null)}

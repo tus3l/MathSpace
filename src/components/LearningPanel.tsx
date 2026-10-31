@@ -6,7 +6,6 @@ import {
   ListOrdered,
   Play,
   RotateCcw,
-  Square,
   X,
 } from "lucide-react";
 import { analyze } from "../engine/math";
@@ -34,10 +33,7 @@ type Props = {
   graphDescription: string;
   values: Record<string, number>;
   activity: string[];
-  running: boolean;
-  showAnimation?: boolean;
   customReview?: { candidate: string; verdict: Verdict } | null;
-  onPlay: () => void;
   onReset: () => void;
   onShowSteps: () => void;
   onClearPreview: () => void;
@@ -53,10 +49,7 @@ export function LearningPanel({
   graphDescription,
   values,
   activity,
-  running,
-  showAnimation = true,
   customReview,
-  onPlay,
   onReset,
   onShowSteps,
   onClearPreview,
@@ -156,12 +149,6 @@ export function LearningPanel({
         >
           <Lightbulb size={16} /> المستشار
         </button>
-        {showAnimation && (
-          <button onClick={onPlay} aria-pressed={running}>
-            {running ? <Square size={16} /> : <Play size={16} />}
-            {running ? "إيقاف الحركة" : "تشغيل الحركة"}
-          </button>
-        )}
         <button onClick={onReset}>
           <RotateCcw size={16} /> إعادة ضبط
         </button>

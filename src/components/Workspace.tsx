@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Bookmark,
@@ -70,7 +70,6 @@ export function Workspace({
   );
   const [graphError, setGraphError] = useState("");
   const [activity, setActivity] = useState<string[]>([]);
-  const [running, setRunning] = useState(false);
   const [graphVersion, setGraphVersion] = useState(0);
   const [probeX, setProbeX] = useState(0);
   const [preview, setPreview] = useState<{
@@ -254,19 +253,6 @@ export function Workspace({
       label: `P(${fmt(probePoint.x)}, ${fmt(probePoint.y)})`,
       color: "#e28e4e",
     });
-  useEffect(() => {
-    if (!running) return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    let request = 0;
-    let start: number | null = null;
-    const tick = (now: number) => {
-      start ??= now;
-      setProbeX(4 * Math.sin((now - start) / 2500));
-      request = requestAnimationFrame(tick);
-    };
-    request = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(request);
-  }, [running]);
   if (mode !== "solve" && parameters.a !== 0) {
     const x = -parameters.b / (2 * parameters.a);
     points.push({
@@ -296,7 +282,6 @@ export function Workspace({
     if (expression !== input)
       setActivity((entries) => [...entries, `${input} → ${expression}`]);
     setInput(expression);
-    setRunning(false);
     setHint(0);
     setRevealed(99);
     setSymbolicResult("");
@@ -539,16 +524,6 @@ export function Workspace({
                 : {}),
             }}
             activity={activity}
-            running={running}
-            onPlay={() => {
-              setRunning(!running);
-              setActivity((entries) => [
-                ...entries,
-                running
-                  ? `إيقاف الحركة عند t=${fmt(probeX)}`
-                  : "تشغيل حركة نقطة على الرسم",
-              ]);
-            }}
             onReset={() => {
               let scope = { a: 1, b: 1, c: 0 };
               try {
@@ -558,7 +533,6 @@ export function Workspace({
               setParameters(scope);
               setVisualScope({ a: 1, b: 1, c: 0 });
               setMode("solve");
-              setRunning(false);
               setProbeX(0);
               setPreview(null);
               setExtra([]);
@@ -628,7 +602,7 @@ export function Workspace({
               <Lightbulb size={18} />
               <p>
                 {visual.operation === "derivative"
-                  ? `المنحنى المتقطع هو f قبل الاشتقاق، والمتصل f′ بعده. ميل المماس البرتقالي على f عند x = ${fmt(probeX)} يساوي ارتفاع f′ عند x نفسها. حرّك النقطة أو شغّل الحركة: حيث يصعد f يقع f′ فوق المحور، وحيث يهبط يقع تحته.`
+                  ? `المنحنى المتقطع هو f قبل الاشتقاق، والمتصل f′ بعده. ميل المماس البرتقالي على f عند x = ${fmt(probeX)} يساوي ارتفاع f′ عند x نفسها. حرّك النقطة: حيث يصعد f يقع f′ فوق المحور، وحيث يهبط يقع تحته.`
                   : `المنحنى المتقطع هو f، والمتصل دالة أصلية F (C = 0). المستطيلات تجمع المساحة الموقّعة تحت f من 0 إلى x = ${fmt(probeX || 2)}؛ هذه المساحة تساوي F(x) − F(0). حيث f موجبة تتزايد F، والمساحة تحت المحور تُحسب سالبة.`}
               </p>
             </div>
@@ -674,7 +648,6 @@ export function Workspace({
                 max={8}
                 step={0.05}
                 onChange={(value) => {
-                  setRunning(false);
                   setProbeX(value);
                   setActivity((entries) => [
                     ...entries,
